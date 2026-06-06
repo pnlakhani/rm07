@@ -1,0 +1,14 @@
+# gitleaks config — secret scanning gate (TRD §9 Pipeline, Hard rule: no hardcoded secrets).
+title = "RM07 gitleaks policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlisted paths — examples and lockfiles only."
+paths = [
+  '''\.env\.example$''',
+  '''pnpm-lock\.toml$''',
+  '''pnpm-lock\.yaml$''',
+]
+regexTarget = "match"

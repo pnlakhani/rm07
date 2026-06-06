@@ -1,0 +1,2 @@
+aws_region  = "ap-south-1"
+md_eip_name = "eipalloc-rm07-md-prod"

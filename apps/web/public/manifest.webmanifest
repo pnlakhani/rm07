@@ -1,0 +1,10 @@
+{
+  "name": "RM07 Quant Terminal",
+  "short_name": "RM07",
+  "description": "Multi-broker AI trading terminal for Indian markets.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": []
+}
