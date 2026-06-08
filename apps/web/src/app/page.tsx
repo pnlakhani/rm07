@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { formatPaise, PLANS } from '@rm07/core';
 
 /**
@@ -17,6 +18,20 @@ export default function HomePage() {
           One terminal for multiple brokers, with AI Mode beside every stock. Built for the
           Indian markets. Operated by Ananta Fintech Global LLP.
         </p>
+        <div className="flex gap-3 pt-2">
+          <Link
+            href="/signup"
+            className="inline-flex h-10 items-center rounded-md bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Get started
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex h-10 items-center rounded-md border border-zinc-300 px-5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Sign in
+          </Link>
+        </div>
       </header>
 
       <section aria-label="Plans" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
