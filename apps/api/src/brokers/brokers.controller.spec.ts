@@ -18,6 +18,9 @@ function make() {
       .mockResolvedValue([
         { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: '265500', ltpPaise: '0' },
       ]),
+    getQuote: vi
+      .fn()
+      .mockResolvedValue({ tradingSymbol: 'RELIANCE', exchange: 'NSE', ltpPaise: '290050', at: '2026-06-08T00:00:00.000Z' }),
   } as unknown as BrokerConnectionService;
   return { controller: new BrokersController(accountKeys, connections), accountKeys, connections };
 }
@@ -58,5 +61,17 @@ describe('BrokersController', () => {
     const out = await controller.holdings('1', account);
     expect(out[0]?.tradingSymbol).toBe('RELIANCE');
     expect(connections.getHoldings).toHaveBeenCalledWith(7n, 1n);
+  });
+
+  it('returns a quote', async () => {
+    const { controller, connections } = make();
+    const out = await controller.quote('1', 'RELIANCE', 'NSE', account);
+    expect(out.ltpPaise).toBe('290050');
+    expect(connections.getQuote).toHaveBeenCalledWith(7n, 1n, { symbol: 'RELIANCE', exchange: 'NSE' });
+  });
+
+  it('rejects an invalid exchange on quote', async () => {
+    const { controller } = make();
+    await expect(controller.quote('1', 'RELIANCE', 'BOGUS', account)).rejects.toBeInstanceOf(BadRequestException);
   });
 });

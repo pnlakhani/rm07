@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
@@ -20,9 +21,13 @@ import {
   BrokerConnectionService,
   type ConnectionView,
   type HoldingView,
+  type QuoteView,
 } from './broker-connection.service';
 import { BrokerExceptionFilter } from './broker-exception.filter';
 import { connectBrokerSchema, type ConnectBrokerDto } from './dto';
+import type { ExchangeCode } from '@rm07/broker-adapters';
+
+const EXCHANGE_CODES = new Set(['NSE', 'BSE', 'MCX', 'NFO', 'BFO', 'CDS']);
 
 @Controller('v1/brokers')
 @UseGuards(JwtAuthGuard)
@@ -75,5 +80,26 @@ export class BrokersController {
       throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
     }
     return this.connections.getHoldings(account.accountId, BigInt(id));
+  }
+
+  /** Live LTP quote for a symbol on a connection's broker. */
+  @Get(':id/quote')
+  @HttpCode(HttpStatus.OK)
+  async quote(
+    @Param('id') id: string,
+    @Query('symbol') symbol: string,
+    @Query('exchange') exchange: string,
+    @CurrentAccount() account: AuthContext,
+  ): Promise<QuoteView> {
+    if (!/^\d+$/u.test(id)) {
+      throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
+    }
+    if (!symbol || !EXCHANGE_CODES.has(exchange)) {
+      throw new BadRequestException({ title: 'symbol and a valid exchange are required', code: 'request.invalid' });
+    }
+    return this.connections.getQuote(account.accountId, BigInt(id), {
+      symbol,
+      exchange: exchange as ExchangeCode,
+    });
   }
 }

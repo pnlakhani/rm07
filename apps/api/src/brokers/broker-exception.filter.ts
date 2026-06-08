@@ -13,6 +13,7 @@ const STATUS: Record<BrokerErrorCode, number> = {
   no_adapter: HttpStatus.NOT_IMPLEMENTED,
   broker_verify_failed: HttpStatus.BAD_GATEWAY,
   connection_not_found: HttpStatus.NOT_FOUND,
+  instrument_not_found: HttpStatus.NOT_FOUND,
   forbidden: HttpStatus.FORBIDDEN,
 };
 

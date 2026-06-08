@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../db/database.module';
+import { InstrumentsModule } from '../instruments/instruments.module';
 import { SecurityModule } from '../security/security.module';
 import { AccountKeysService } from './account-keys.service';
 import { BrokerAdaptersRegistrar } from './broker-adapters.registrar';
@@ -18,7 +19,7 @@ import { ACCOUNT_KEYS_REPOSITORY, BROKER_CONNECTIONS_REPOSITORY } from './ports'
  * resolved at connect time (Part 2).
  */
 @Module({
-  imports: [SecurityModule, DatabaseModule, AuthModule],
+  imports: [SecurityModule, DatabaseModule, AuthModule, InstrumentsModule],
   controllers: [BrokersController],
   providers: [
     { provide: ACCOUNT_KEYS_REPOSITORY, useClass: DrizzleAccountKeysRepository },

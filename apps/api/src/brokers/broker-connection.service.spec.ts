@@ -9,6 +9,7 @@ import type { Broker } from '@rm07/core';
 import { CredentialVaultService } from '../security/vault/credential-vault.service';
 import { eciesEncrypt } from '../security/vault/ecies';
 import { AccountKeysService } from './account-keys.service';
+import type { InstrumentResolverService } from '../instruments/instrument-resolver.service';
 import { BrokerConnectionService } from './broker-connection.service';
 import { BrokerError } from './errors';
 import type {
@@ -112,7 +113,7 @@ const stubDhan: BrokerAdapter = {
       { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: 265500n, ltpPaise: 0n },
     ]),
   getPositions: () => Promise.resolve([]),
-  getQuote: () => Promise.resolve({ tradingSymbol: 'X', ltpPaise: 0n, volume: 0n, at: new Date() }),
+  getQuote: () => Promise.resolve({ tradingSymbol: 'RELIANCE', ltpPaise: 290050n, volume: 0n, at: new Date() }),
   placeOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'OPEN' }),
   cancelOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'CANCELLED' }),
 };
@@ -122,7 +123,8 @@ function makeHarness() {
   const keysRepo = new FakeAccountKeys();
   const connsRepo = new FakeConnections();
   const accountKeys = new AccountKeysService(keysRepo, vault);
-  const service = new BrokerConnectionService(accountKeys, connsRepo, vault);
+  const instruments = { resolveSecurityId: () => Promise.resolve('2885') } as unknown as InstrumentResolverService;
+  const service = new BrokerConnectionService(accountKeys, connsRepo, vault, instruments);
   return { vault, keysRepo, connsRepo, accountKeys, service };
 }
 
@@ -210,5 +212,12 @@ describe('BrokerConnectionService', () => {
     expect(holdings).toEqual([
       { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: '265500', ltpPaise: '0' },
     ]);
+  });
+
+  it('fetches a live quote via the resolver + adapter', async () => {
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    const quote = await h.service.getQuote(1n, BigInt(view.id), { symbol: 'RELIANCE', exchange: 'NSE' });
+    expect(quote).toMatchObject({ tradingSymbol: 'RELIANCE', exchange: 'NSE', ltpPaise: '290050' });
   });
 });

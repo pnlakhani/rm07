@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { getAdapter, type Holding } from '@rm07/broker-adapters';
+import { getAdapter, type ExchangeCode, type Holding } from '@rm07/broker-adapters';
 import type { Broker } from '@rm07/core';
 import {
   CredentialVaultService,
@@ -7,6 +7,7 @@ import {
   type SealedCredentials,
 } from '../security/vault/credential-vault.service';
 import type { EciesPayload } from '../security/vault/ecies';
+import { InstrumentResolverService } from '../instruments/instrument-resolver.service';
 import { AccountKeysService } from './account-keys.service';
 import { BrokerError } from './errors';
 import { reassembleBrokerFields, splitBrokerFields } from './field-mapping';
@@ -33,6 +34,14 @@ export interface HoldingView {
   readonly isin?: string;
 }
 
+/** JSON-safe live quote. */
+export interface QuoteView {
+  readonly tradingSymbol: string;
+  readonly exchange: string;
+  readonly ltpPaise: string;
+  readonly at: string;
+}
+
 /**
  * Connect-Broker flow (App Flow J-02/J-03, Full Doc VII.3, Hard rule #4):
  *  1. decrypt the ECIES transit payload with the account's private key (in-process only),
@@ -46,6 +55,7 @@ export class BrokerConnectionService {
     @Inject(BROKER_CONNECTIONS_REPOSITORY)
     private readonly connections: BrokerConnectionsRepository,
     private readonly vault: CredentialVaultService,
+    private readonly instruments: InstrumentResolverService,
   ) {}
 
   async connect(accountId: bigint, broker: Broker, payload: EciesPayload): Promise<ConnectionView> {
@@ -143,6 +153,45 @@ export class BrokerConnectionService {
       ltpPaise: h.ltpPaise.toString(),
       ...(h.isin ? { isin: h.isin } : {}),
     }));
+  }
+
+  /** Fetch a live LTP quote for (symbol, exchange) on a connection. */
+  async getQuote(
+    accountId: bigint,
+    connectionId: bigint,
+    params: { symbol: string; exchange: ExchangeCode },
+  ): Promise<QuoteView> {
+    const conn = await this.connections.findById(connectionId);
+    if (!conn || conn.accountId !== accountId) {
+      throw new BrokerError('connection_not_found');
+    }
+    const securityId = await this.instruments.resolveSecurityId(conn.broker, params.exchange, params.symbol);
+    if (!securityId) {
+      throw new BrokerError('instrument_not_found');
+    }
+    const credentials = await this.openCredentials(accountId, connectionId);
+    const adapter = this.resolveAdapter(conn.broker);
+    const session = {
+      clientId: credentials['client_id'] ?? conn.clientId ?? '',
+      accessToken: credentials['access_token'] ?? '',
+      tokenExpiresAt: null,
+    };
+    let quote;
+    try {
+      quote = await adapter.getQuote(session, {
+        tradingSymbol: params.symbol,
+        exchange: params.exchange,
+        securityId,
+      });
+    } catch (err) {
+      throw new BrokerError('broker_verify_failed', err instanceof Error ? err.message : undefined);
+    }
+    return {
+      tradingSymbol: quote.tradingSymbol,
+      exchange: params.exchange,
+      ltpPaise: quote.ltpPaise.toString(),
+      at: quote.at.toISOString(),
+    };
   }
 
   private resolveAdapter(broker: Broker): ReturnType<typeof getAdapter> {
