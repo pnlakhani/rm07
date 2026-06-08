@@ -24,7 +24,9 @@ import { BrokerError } from './errors';
 import { reassembleBrokerFields, splitBrokerFields } from './field-mapping';
 import {
   BROKER_CONNECTIONS_REPOSITORY,
+  ORDERS_REPOSITORY,
   type BrokerConnectionsRepository,
+  type OrdersRepository,
   type SealedCredentialColumns,
 } from './ports';
 
@@ -87,6 +89,8 @@ export class BrokerConnectionService {
     private readonly connections: BrokerConnectionsRepository,
     private readonly vault: CredentialVaultService,
     private readonly instruments: InstrumentResolverService,
+    @Inject(ORDERS_REPOSITORY)
+    private readonly orders: OrdersRepository,
   ) {}
 
   async connect(accountId: bigint, broker: Broker, payload: EciesPayload): Promise<ConnectionView> {
@@ -250,6 +254,34 @@ export class BrokerConnectionService {
     if (!securityId) {
       throw new BrokerError('instrument_not_found');
     }
+
+    // Persist-before-send (Hard rule #2): write a PENDING order first. If this idempotency key has
+    // already produced an order, return that order's ack WITHOUT sending again — a retried POST
+    // never double-fires.
+    const orderRowId = await this.orders.insertPending({
+      accountId,
+      connectionId,
+      broker: conn.broker,
+      exchange: input.exchange,
+      tradingSymbol: input.tradingSymbol,
+      securityId,
+      side: input.side,
+      orderType: input.orderType,
+      product: input.product,
+      validity: input.validity,
+      quantity: input.quantity,
+      pricePaise: input.pricePaise ?? null,
+      triggerPricePaise: input.triggerPricePaise ?? null,
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (orderRowId === null) {
+      const existing = await this.orders.findByIdempotencyKey(accountId, input.idempotencyKey);
+      return {
+        brokerOrderId: existing?.brokerOrderId ?? '',
+        status: (existing?.status ?? 'PENDING') as OrderStatus,
+      };
+    }
+
     const credentials = await this.openCredentials(accountId, connectionId);
     const adapter = this.resolveAdapter(conn.broker);
     const session = {
@@ -274,8 +306,11 @@ export class BrokerConnectionService {
     try {
       ack = await adapter.placeOrder(session, orderInput);
     } catch (err) {
-      throw new BrokerError('broker_verify_failed', err instanceof Error ? err.message : undefined);
+      const message = err instanceof Error ? err.message : 'order rejected';
+      await this.orders.markRejected(orderRowId, message);
+      throw new BrokerError('broker_verify_failed', message);
     }
+    await this.orders.markPlaced(orderRowId, ack.brokerOrderId, ack.status);
     return { brokerOrderId: ack.brokerOrderId, status: ack.status };
   }
 

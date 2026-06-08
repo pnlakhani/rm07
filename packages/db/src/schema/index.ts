@@ -11,6 +11,7 @@ export { core, mkt, mp } from './namespaces.js';
 export * from './auth.js';
 export * from './auth-runtime.js';
 export * from './market.js';
+export * from './trading.js';
 
 /** Single-row schema version; backend verifies expected version on startup (Backend Schema §12). */
 export const schemaVersion = core.table('schema_version', {

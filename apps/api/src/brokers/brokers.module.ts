@@ -10,8 +10,13 @@ import { BrokersController } from './brokers.controller';
 import {
   DrizzleAccountKeysRepository,
   DrizzleBrokerConnectionsRepository,
+  DrizzleOrdersRepository,
 } from './drizzle-repositories';
-import { ACCOUNT_KEYS_REPOSITORY, BROKER_CONNECTIONS_REPOSITORY } from './ports';
+import {
+  ACCOUNT_KEYS_REPOSITORY,
+  BROKER_CONNECTIONS_REPOSITORY,
+  ORDERS_REPOSITORY,
+} from './ports';
 
 /**
  * Broker-connection module: the Connect-Broker flow + per-account ECIES keypair. Concrete broker
@@ -24,6 +29,7 @@ import { ACCOUNT_KEYS_REPOSITORY, BROKER_CONNECTIONS_REPOSITORY } from './ports'
   providers: [
     { provide: ACCOUNT_KEYS_REPOSITORY, useClass: DrizzleAccountKeysRepository },
     { provide: BROKER_CONNECTIONS_REPOSITORY, useClass: DrizzleBrokerConnectionsRepository },
+    { provide: ORDERS_REPOSITORY, useClass: DrizzleOrdersRepository },
     AccountKeysService,
     BrokerConnectionService,
     BrokerAdaptersRegistrar,

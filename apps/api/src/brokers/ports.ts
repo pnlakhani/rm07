@@ -48,6 +48,43 @@ export interface BrokerConnectionsRepository {
   loadCredentials(connectionId: bigint): Promise<SealedCredentialColumns | null>;
 }
 
+/** A new order row to persist before sending to the broker (core.orders §5.15). */
+export interface NewOrder {
+  readonly accountId: bigint;
+  readonly connectionId: bigint;
+  readonly broker: string;
+  readonly exchange: string;
+  readonly tradingSymbol: string;
+  readonly securityId: string;
+  readonly side: string;
+  readonly orderType: string;
+  readonly product: string;
+  readonly validity: string;
+  readonly quantity: number;
+  readonly pricePaise: bigint | null;
+  readonly triggerPricePaise: bigint | null;
+  readonly idempotencyKey: string;
+}
+
+/** The mutable lifecycle fields of an order row. */
+export interface OrderRecord {
+  readonly id: bigint;
+  readonly brokerOrderId: string | null;
+  readonly status: string;
+}
+
+export interface OrdersRepository {
+  /**
+   * Insert a PENDING order. Returns the new row id, or `null` if an order already exists for this
+   * (accountId, idempotencyKey) — the idempotency guard (Hard rule #2).
+   */
+  insertPending(order: NewOrder): Promise<bigint | null>;
+  findByIdempotencyKey(accountId: bigint, idempotencyKey: string): Promise<OrderRecord | null>;
+  markPlaced(id: bigint, brokerOrderId: string, status: string): Promise<void>;
+  markRejected(id: bigint, message: string): Promise<void>;
+}
+
 // DI tokens.
 export const ACCOUNT_KEYS_REPOSITORY = Symbol('ACCOUNT_KEYS_REPOSITORY');
 export const BROKER_CONNECTIONS_REPOSITORY = Symbol('BROKER_CONNECTIONS_REPOSITORY');
+export const ORDERS_REPOSITORY = Symbol('ORDERS_REPOSITORY');

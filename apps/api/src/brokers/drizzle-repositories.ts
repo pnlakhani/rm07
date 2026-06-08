@@ -9,6 +9,9 @@ import type {
   BrokerConnectionRecord,
   BrokerConnectionStatus,
   BrokerConnectionsRepository,
+  NewOrder,
+  OrderRecord,
+  OrdersRepository,
   SealedCredentialColumns,
 } from './ports';
 
@@ -148,6 +151,65 @@ export class DrizzleBrokerConnectionsRepository implements BrokerConnectionsRepo
       pinCiphertext: row.pinCiphertext ?? null,
       dekWrapped: row.dekWrapped,
     };
+  }
+}
+
+@Injectable()
+export class DrizzleOrdersRepository implements OrdersRepository {
+  constructor(@Inject(DATABASE) private readonly database: Database) {}
+
+  async insertPending(order: NewOrder): Promise<bigint | null> {
+    const [row] = await this.database.db
+      .insert(schema.orders)
+      .values({
+        accountId: order.accountId,
+        connectionId: order.connectionId,
+        broker: order.broker,
+        exchange: order.exchange,
+        tradingSymbol: order.tradingSymbol,
+        securityId: order.securityId,
+        side: order.side,
+        orderType: order.orderType,
+        product: order.product,
+        validity: order.validity,
+        quantity: order.quantity,
+        pricePaise: order.pricePaise,
+        triggerPricePaise: order.triggerPricePaise,
+        idempotencyKey: order.idempotencyKey,
+        status: 'PENDING',
+      })
+      .onConflictDoNothing({ target: [schema.orders.accountId, schema.orders.idempotencyKey] })
+      .returning({ id: schema.orders.id });
+    return row?.id ?? null;
+  }
+
+  async findByIdempotencyKey(accountId: bigint, idempotencyKey: string): Promise<OrderRecord | null> {
+    const [row] = await this.database.db
+      .select({
+        id: schema.orders.id,
+        brokerOrderId: schema.orders.brokerOrderId,
+        status: schema.orders.status,
+      })
+      .from(schema.orders)
+      .where(
+        and(eq(schema.orders.accountId, accountId), eq(schema.orders.idempotencyKey, idempotencyKey)),
+      )
+      .limit(1);
+    return row ? { id: row.id, brokerOrderId: row.brokerOrderId ?? null, status: row.status } : null;
+  }
+
+  async markPlaced(id: bigint, brokerOrderId: string, status: string): Promise<void> {
+    await this.database.db
+      .update(schema.orders)
+      .set({ brokerOrderId, status, placedAt: new Date() })
+      .where(eq(schema.orders.id, id));
+  }
+
+  async markRejected(id: bigint, message: string): Promise<void> {
+    await this.database.db
+      .update(schema.orders)
+      .set({ status: 'REJECTED', statusMessage: message })
+      .where(eq(schema.orders.id, id));
   }
 }
 

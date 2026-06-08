@@ -19,6 +19,9 @@ import type {
   BrokerConnectionRecord,
   BrokerConnectionStatus,
   BrokerConnectionsRepository,
+  NewOrder,
+  OrderRecord,
+  OrdersRepository,
   SealedCredentialColumns,
 } from './ports';
 
@@ -87,6 +90,56 @@ class FakeConnections implements BrokerConnectionsRepository {
   }
 }
 
+interface StoredOrder {
+  id: bigint;
+  accountId: bigint;
+  idempotencyKey: string;
+  brokerOrderId: string | null;
+  status: string;
+}
+
+class FakeOrders implements OrdersRepository {
+  private seq = 0n;
+  readonly rows: StoredOrder[] = [];
+
+  insertPending(order: NewOrder): Promise<bigint | null> {
+    const dup = this.rows.find(
+      (r) => r.accountId === order.accountId && r.idempotencyKey === order.idempotencyKey,
+    );
+    if (dup) {
+      return Promise.resolve(null);
+    }
+    this.seq += 1n;
+    this.rows.push({
+      id: this.seq,
+      accountId: order.accountId,
+      idempotencyKey: order.idempotencyKey,
+      brokerOrderId: null,
+      status: 'PENDING',
+    });
+    return Promise.resolve(this.seq);
+  }
+  findByIdempotencyKey(accountId: bigint, idempotencyKey: string): Promise<OrderRecord | null> {
+    const r = this.rows.find((x) => x.accountId === accountId && x.idempotencyKey === idempotencyKey);
+    return Promise.resolve(r ? { id: r.id, brokerOrderId: r.brokerOrderId, status: r.status } : null);
+  }
+  markPlaced(id: bigint, brokerOrderId: string, status: string): Promise<void> {
+    const r = this.rows.find((x) => x.id === id);
+    if (r) {
+      r.brokerOrderId = brokerOrderId;
+      r.status = status;
+    }
+    return Promise.resolve();
+  }
+  markRejected(id: bigint, _message: string): Promise<void> {
+    const r = this.rows.find((x) => x.id === id);
+    if (r) {
+      r.status = 'REJECTED';
+    }
+    return Promise.resolve();
+  }
+}
+
 const stubDhan: BrokerAdapter = {
   meta: {
     broker: 'dhan',
@@ -125,8 +178,9 @@ function makeHarness() {
   const connsRepo = new FakeConnections();
   const accountKeys = new AccountKeysService(keysRepo, vault);
   const instruments = { resolveSecurityId: () => Promise.resolve('2885') } as unknown as InstrumentResolverService;
-  const service = new BrokerConnectionService(accountKeys, connsRepo, vault, instruments);
-  return { vault, keysRepo, connsRepo, accountKeys, service };
+  const ordersRepo = new FakeOrders();
+  const service = new BrokerConnectionService(accountKeys, connsRepo, vault, instruments, ordersRepo);
+  return { vault, keysRepo, connsRepo, accountKeys, ordersRepo, service };
 }
 
 type Harness = ReturnType<typeof makeHarness>;
@@ -270,7 +324,13 @@ describe('BrokerConnectionService', () => {
     const instruments = {
       resolveSecurityId: () => Promise.resolve(null),
     } as unknown as InstrumentResolverService;
-    const svc = new BrokerConnectionService(h.accountKeys, h.connsRepo, h.vault, instruments);
+    const svc = new BrokerConnectionService(
+      h.accountKeys,
+      h.connsRepo,
+      h.vault,
+      instruments,
+      h.ordersRepo,
+    );
     await expect(
       svc.placeOrder(1n, BigInt(view.id), { ...marketOrder, tradingSymbol: 'NOPE' }),
     ).rejects.toMatchObject({ code: 'instrument_not_found' });
@@ -282,5 +342,48 @@ describe('BrokerConnectionService', () => {
     await expect(
       h.service.placeOrder(2n, BigInt(view.id), { ...marketOrder }),
     ).rejects.toMatchObject({ code: 'connection_not_found' });
+  });
+
+  it('persists the order and marks it placed', async () => {
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    await h.service.placeOrder(1n, BigInt(view.id), { ...marketOrder });
+    expect(h.ordersRepo.rows).toHaveLength(1);
+    expect(h.ordersRepo.rows[0]).toMatchObject({ status: 'OPEN', brokerOrderId: 'o' });
+  });
+
+  it('is idempotent — a repeated key returns the stored ack without re-sending', async () => {
+    _clearRegistry();
+    let calls = 0;
+    const counting: BrokerAdapter = {
+      ...stubDhan,
+      placeOrder: () => {
+        calls += 1;
+        return Promise.resolve({ brokerOrderId: 'o', status: 'OPEN' });
+      },
+    };
+    registerAdapter(counting);
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    const first = await h.service.placeOrder(1n, BigInt(view.id), { ...marketOrder });
+    const second = await h.service.placeOrder(1n, BigInt(view.id), { ...marketOrder });
+    expect(calls).toBe(1);
+    expect(second).toEqual(first);
+    expect(h.ordersRepo.rows).toHaveLength(1);
+  });
+
+  it('marks the order rejected when the broker rejects it', async () => {
+    _clearRegistry();
+    const failing: BrokerAdapter = {
+      ...stubDhan,
+      placeOrder: () => Promise.reject(new Error('margin shortfall')),
+    };
+    registerAdapter(failing);
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    await expect(
+      h.service.placeOrder(1n, BigInt(view.id), { ...marketOrder }),
+    ).rejects.toMatchObject({ code: 'broker_verify_failed' });
+    expect(h.ordersRepo.rows[0]?.status).toBe('REJECTED');
   });
 });
