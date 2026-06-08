@@ -17,6 +17,8 @@
     "@nestjs/platform-express": "^10.4.4",
     "@node-rs/argon2": "^2.0.2",
     "@rm07/core": "workspace:*",
+    "@rm07/db": "workspace:*",
+    "drizzle-orm": "^0.33.0",
     "helmet": "^8.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

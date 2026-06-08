@@ -14,6 +14,12 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().optional(),
   /** Server pepper for hashing email OTPs (Doppler). Ephemeral in dev, required in production. */
   OTP_PEPPER: z.string().optional(),
+  /** Postgres connection string for the API's system/auth connection (Doppler). */
+  DATABASE_URL: z.string().optional(),
+  /** Resend API key for transactional email (Doppler). Logs to console in dev when unset. */
+  RESEND_API_KEY: z.string().optional(),
+  /** From-address for transactional email. */
+  EMAIL_FROM: z.string().default('RM07 <no-reply@rm07.local>'),
 });
 
 export type Env = z.infer<typeof envSchema>;

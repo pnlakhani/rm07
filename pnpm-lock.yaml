@@ -53,6 +53,12 @@ importers:
       '@rm07/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rm07/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      drizzle-orm:
+        specifier: ^0.33.0
+        version: 0.33.0(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       helmet:
         specifier: ^8.0.0
         version: 8.2.0

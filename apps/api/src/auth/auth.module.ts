@@ -1,12 +1,26 @@
 import { randomBytes } from 'node:crypto';
 import { Logger, Module } from '@nestjs/common';
 import { loadEnv } from '../config/env';
+import { DatabaseModule } from '../db/database.module';
+import { RESEND_CONFIG, ResendEmailSender, type ResendConfig } from '../email/resend-email-sender';
+import { CredentialVaultService } from '../security/vault/credential-vault.service';
+import { PasswordService } from '../security/password.service';
+import { TotpService } from '../security/totp.service';
 import { SecurityModule } from '../security/security.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import {
+  DrizzleAccountsRepository,
+  DrizzleConsentRepository,
+  DrizzleMfaRepository,
+  DrizzleOtpRepository,
+  DrizzleSessionsRepository,
+} from './drizzle-repositories';
+import { EnrolmentGuard, JwtAuthGuard } from './guards';
 import { JWT_ACCESS_SECRET, JwtService } from './jwt.service';
 import { OTP_PEPPER, OtpService } from './otp.service';
 import { RefreshTokenService } from './refresh-token.service';
 
-/** A required-in-prod / ephemeral-in-dev secret resolver shared by the auth secret providers. */
 function resolveSecret(value: string | undefined, name: string, isProduction: boolean): string {
   if (value) {
     return value;
@@ -34,14 +48,71 @@ const otpPepperProvider = {
   },
 };
 
+const resendConfigProvider = {
+  provide: RESEND_CONFIG,
+  useFactory: (): ResendConfig => {
+    const env = loadEnv();
+    return { apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM };
+  },
+};
+
+const authServiceProvider = {
+  provide: AuthService,
+  useFactory: (
+    accounts: DrizzleAccountsRepository,
+    otps: DrizzleOtpRepository,
+    mfa: DrizzleMfaRepository,
+    sessions: DrizzleSessionsRepository,
+    consent: DrizzleConsentRepository,
+    email: ResendEmailSender,
+    passwords: PasswordService,
+    totp: TotpService,
+    otpSvc: OtpService,
+    refresh: RefreshTokenService,
+    jwt: JwtService,
+    vault: CredentialVaultService,
+  ): AuthService =>
+    new AuthService(accounts, otps, mfa, sessions, consent, email, passwords, totp, otpSvc, refresh, jwt, vault),
+  inject: [
+    DrizzleAccountsRepository,
+    DrizzleOtpRepository,
+    DrizzleMfaRepository,
+    DrizzleSessionsRepository,
+    DrizzleConsentRepository,
+    ResendEmailSender,
+    PasswordService,
+    TotpService,
+    OtpService,
+    RefreshTokenService,
+    JwtService,
+    CredentialVaultService,
+  ],
+};
+
 /**
- * Authentication primitives: access JWTs, rotating refresh tokens, and email OTP.
- * The HTTP flow (AuthController + AuthService + Drizzle repositories) is added in Part 2b on top
- * of these. RefreshTokenService depends on PasswordService from SecurityModule.
+ * Authentication module: HTTP controller + guards on top of AuthService, which is composed from
+ * the Drizzle repositories, the Resend email sender, and the security primitives.
  */
 @Module({
-  imports: [SecurityModule],
-  providers: [jwtSecretProvider, JwtService, RefreshTokenService, otpPepperProvider, OtpService],
-  exports: [JwtService, RefreshTokenService, OtpService],
+  imports: [SecurityModule, DatabaseModule],
+  controllers: [AuthController],
+  providers: [
+    jwtSecretProvider,
+    JwtService,
+    RefreshTokenService,
+    otpPepperProvider,
+    OtpService,
+    JwtAuthGuard,
+    EnrolmentGuard,
+    DrizzleAccountsRepository,
+    DrizzleOtpRepository,
+    DrizzleMfaRepository,
+    DrizzleSessionsRepository,
+    DrizzleConsentRepository,
+    resendConfigProvider,
+    ResendEmailSender,
+    authServiceProvider,
+  ],
+  exports: [AuthService, JwtService],
 })
 export class AuthModule {}

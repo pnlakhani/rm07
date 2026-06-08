@@ -23,8 +23,6 @@ import type {
   TotpFactorRecord,
 } from './ports';
 
-// --- in-memory fakes ------------------------------------------------------------------------
-
 interface MutableAccount {
   id: bigint;
   email: string;
@@ -223,7 +221,6 @@ class FakeEmail implements EmailSender {
   }
 }
 
-// HIBP stub that always reports "not breached".
 const hibpStub: Fetcher = (async () =>
   ({ ok: true, status: 200, text: async () => '' }) as Response) as unknown as Fetcher;
 
@@ -263,15 +260,16 @@ function makeHarness() {
 
 type Harness = ReturnType<typeof makeHarness>;
 
-async function enrolled(h: Harness, emailAddr = 'prash@example.com'): Promise<{ accountId: bigint; secret: string }> {
+async function enrolled(
+  h: Harness,
+  emailAddr = 'prash@example.com',
+): Promise<{ accountId: bigint; secret: string }> {
   const { accountId } = await h.service.signup({ email: emailAddr, password: PASSWORD }, ctx);
   await h.service.verifySignupOtp(emailAddr, h.email.last!.code);
   const enrol = await h.service.enrolTotp(accountId);
-  await h.service.confirmTotp(accountId, h.totp.generateCode(enrol.secret));
+  await h.service.confirmTotp(accountId, h.totp.generateCode(enrol.secret), ctx);
   return { accountId, secret: enrol.secret };
 }
-
-// --- tests ----------------------------------------------------------------------------------
 
 describe('AuthService — signup + OTP', () => {
   let h: Harness;
@@ -338,6 +336,15 @@ describe('AuthService — TOTP + sign-in', () => {
     expect(issued.refreshToken.length).toBeGreaterThan(20);
   });
 
+  it('onboarding: OTP verify returns an enrolment grant and confirmTotp issues a session', async () => {
+    const { accountId } = await h.service.signup({ email: 'onboard@b.com', password: PASSWORD }, ctx);
+    const { enrolmentToken } = await h.service.verifySignupOtp('onboard@b.com', h.email.last!.code);
+    expect(typeof enrolmentToken).toBe('string');
+    const enrol = await h.service.enrolTotp(accountId);
+    const session = await h.service.confirmTotp(accountId, h.totp.generateCode(enrol.secret), ctx);
+    expect(h.jwt.verify(session.accessToken).sub).toBe(accountId.toString());
+  });
+
   it('rejects a wrong password and an unknown email identically', async () => {
     await enrolled(h);
     await expect(
@@ -349,7 +356,7 @@ describe('AuthService — TOTP + sign-in', () => {
   });
 
   it('requires TOTP enrolment before sign-in', async () => {
-    const emailAddr = 'noTotp@example.com'.toLowerCase();
+    const emailAddr = 'nototp@example.com';
     await h.service.signup({ email: emailAddr, password: PASSWORD }, ctx);
     await h.service.verifySignupOtp(emailAddr, h.email.last!.code);
     await expect(
@@ -367,7 +374,6 @@ describe('AuthService — TOTP + sign-in', () => {
 
   it('refuses sign-in for an unverified (pending) account', async () => {
     await h.service.signup({ email: 'a@b.com', password: PASSWORD }, ctx);
-    // Correct password but email not yet verified → distinct, actionable status.
     await expect(
       h.service.signin({ email: 'a@b.com', password: PASSWORD, totp: '000000' }, ctx),
     ).rejects.toMatchObject({ code: 'account_not_active' });
@@ -389,7 +395,6 @@ describe('AuthService — refresh + logout', () => {
     const second = await h.service.refresh(first.sessionId, first.refreshToken, ctx);
     expect(second.sessionId).not.toBe(first.sessionId);
     expect(h.sessions.rows.get(first.sessionId)?.revokedAt).not.toBeNull();
-    // The old refresh token can no longer be used.
     await expect(h.service.refresh(first.sessionId, first.refreshToken, ctx)).rejects.toMatchObject({
       code: 'session_invalid',
     });
@@ -447,9 +452,7 @@ describe('AuthService — password reset', () => {
       newPassword: 'a-brand-new-passphrase-456',
     });
 
-    // Old session invalidated.
     expect(h.sessions.rows.get(signedIn.sessionId)?.revokedAt).not.toBeNull();
-    // New password works.
     await expect(
       h.service.signin(
         { email: 'prash@example.com', password: 'a-brand-new-passphrase-456', totp: h.totp.generateCode(secret) },

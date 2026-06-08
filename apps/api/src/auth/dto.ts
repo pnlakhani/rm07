@@ -39,7 +39,8 @@ export type PasswordResetRequestDto = z.infer<typeof passwordResetRequestSchema>
 
 export const passwordResetConfirmSchema = z
   .object({
-    token: z.string().min(1),
+    email,
+    code: sixDigits,
     totp: sixDigits,
     newPassword: password,
   })

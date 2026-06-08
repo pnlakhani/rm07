@@ -6,6 +6,8 @@ export const JWT_ACCESS_SECRET = Symbol('JWT_ACCESS_SECRET');
 
 /** Access-token lifetime: 15 minutes (Full Doc VII.2). */
 export const ACCESS_TTL_SECONDS = 15 * 60;
+/** Default grant lifetime: 10 minutes (onboarding TOTP enrolment window). */
+export const GRANT_TTL_SECONDS = 10 * 60;
 export const JWT_ISSUER = 'rm07';
 
 export interface AccessClaims {
@@ -16,6 +18,16 @@ export interface AccessClaims {
 }
 
 export interface VerifiedClaims extends AccessClaims {
+  typ: 'access';
+  iat: number;
+  exp: number;
+  iss: string;
+}
+
+export interface VerifiedGrant {
+  typ: 'grant';
+  sub: string;
+  scope: string;
   iat: number;
   exp: number;
   iss: string;
@@ -40,8 +52,11 @@ function encodeSegment(value: object): string {
 }
 
 /**
- * Minimal, dependency-free HS256 JWT for short-lived access tokens. Verification is
- * constant-time and checks algorithm, signature, issuer and expiry.
+ * Minimal, dependency-free HS256 JWT. Issues two token types, separated by a `typ` claim:
+ *  - `access` — short-lived bearer tokens tied to a revocable session.
+ *  - `grant`  — short-lived scoped tokens for onboarding steps (e.g. TOTP enrolment) that are
+ *    not yet a full session. Verification is constant-time and checks alg, signature, issuer,
+ *    type and expiry.
  */
 @Injectable()
 export class JwtService {
@@ -55,19 +70,69 @@ export class JwtService {
   }
 
   sign(claims: AccessClaims, nowSeconds: number = Math.floor(Date.now() / 1000)): string {
-    const payload = {
+    return this.encode({
+      typ: 'access',
       sub: claims.sub,
       sid: claims.sid,
       iat: nowSeconds,
       exp: nowSeconds + ACCESS_TTL_SECONDS,
       iss: JWT_ISSUER,
-    };
-    const signingInput = `${encodeSegment(HEADER)}.${encodeSegment(payload)}`;
-    const signature = this.hmac(signingInput);
-    return `${signingInput}.${signature}`;
+    });
+  }
+
+  signGrant(
+    sub: string,
+    scope: string,
+    ttlSeconds: number = GRANT_TTL_SECONDS,
+    nowSeconds: number = Math.floor(Date.now() / 1000),
+  ): string {
+    return this.encode({
+      typ: 'grant',
+      sub,
+      scope,
+      iat: nowSeconds,
+      exp: nowSeconds + ttlSeconds,
+      iss: JWT_ISSUER,
+    });
   }
 
   verify(token: string, nowSeconds: number = Math.floor(Date.now() / 1000)): VerifiedClaims {
+    const payload = this.decodeVerified<VerifiedClaims>(token, nowSeconds);
+    if (payload.typ !== 'access') {
+      throw new InvalidTokenError('Not an access token');
+    }
+    if (typeof payload.sub !== 'string' || typeof payload.sid !== 'string') {
+      throw new InvalidTokenError('Missing claims');
+    }
+    return payload;
+  }
+
+  verifyGrant(
+    token: string,
+    expectedScope: string,
+    nowSeconds: number = Math.floor(Date.now() / 1000),
+  ): VerifiedGrant {
+    const payload = this.decodeVerified<VerifiedGrant>(token, nowSeconds);
+    if (payload.typ !== 'grant') {
+      throw new InvalidTokenError('Not a grant token');
+    }
+    if (typeof payload.sub !== 'string' || payload.scope !== expectedScope) {
+      throw new InvalidTokenError('Bad grant scope');
+    }
+    return payload;
+  }
+
+  // --- internals ---
+
+  private encode(payload: object): string {
+    const signingInput = `${encodeSegment(HEADER)}.${encodeSegment(payload)}`;
+    return `${signingInput}.${this.hmac(signingInput)}`;
+  }
+
+  private decodeVerified<T extends { iss: string; exp: number }>(
+    token: string,
+    nowSeconds: number,
+  ): T {
     const parts = token.split('.');
     if (parts.length !== 3) {
       throw new InvalidTokenError('Malformed token');
@@ -77,21 +142,16 @@ export class JwtService {
     if (!this.signatureMatches(`${headerB64}.${payloadB64}`, signature)) {
       throw new InvalidTokenError('Bad signature');
     }
-
     const header = this.decode<JwtHeader>(headerB64);
     if (header.alg !== 'HS256') {
       throw new InvalidTokenError('Unexpected algorithm');
     }
-
-    const payload = this.decode<VerifiedClaims>(payloadB64);
+    const payload = this.decode<T>(payloadB64);
     if (payload.iss !== JWT_ISSUER) {
       throw new InvalidTokenError('Bad issuer');
     }
     if (typeof payload.exp !== 'number' || payload.exp <= nowSeconds) {
       throw new InvalidTokenError('Token expired');
-    }
-    if (typeof payload.sub !== 'string' || typeof payload.sid !== 'string') {
-      throw new InvalidTokenError('Missing claims');
     }
     return payload;
   }

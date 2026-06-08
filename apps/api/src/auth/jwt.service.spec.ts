@@ -24,8 +24,9 @@ describe('JwtService', () => {
     const now = 1_700_000_000;
     const token = svc.sign({ sub: '42', sid: 's' }, now);
     const [h, , sig] = token.split('.');
-    const forgedPayload = Buffer.from(JSON.stringify({ sub: '999', sid: 's', iat: now, exp: now + 999, iss: 'rm07' }))
-      .toString('base64url');
+    const forgedPayload = Buffer.from(
+      JSON.stringify({ typ: 'access', sub: '999', sid: 's', iat: now, exp: now + 999, iss: 'rm07' }),
+    ).toString('base64url');
     expect(() => svc.verify(`${h}.${forgedPayload}.${sig}`, now)).toThrow(/signature/i);
   });
 
@@ -43,5 +44,34 @@ describe('JwtService', () => {
 
   it('requires a sufficiently long secret', () => {
     expect(() => new JwtService('short')).toThrow();
+  });
+});
+
+describe('JwtService — grants', () => {
+  it('signs and verifies a scoped grant', () => {
+    const now = 1_700_000_000;
+    const token = svc.signGrant('42', 'totp_enrol', 600, now);
+    const grant = svc.verifyGrant(token, 'totp_enrol', now + 60);
+    expect(grant.sub).toBe('42');
+    expect(grant.scope).toBe('totp_enrol');
+    expect(grant.typ).toBe('grant');
+  });
+
+  it('rejects a grant with the wrong scope', () => {
+    const token = svc.signGrant('42', 'totp_enrol');
+    expect(() => svc.verifyGrant(token, 'password_reset')).toThrow(InvalidTokenError);
+  });
+
+  it('rejects an expired grant', () => {
+    const now = 1_700_000_000;
+    const token = svc.signGrant('42', 'totp_enrol', 600, now);
+    expect(() => svc.verifyGrant(token, 'totp_enrol', now + 601)).toThrow(/expired/i);
+  });
+
+  it('does not accept an access token as a grant, or vice versa', () => {
+    const access = svc.sign({ sub: '1', sid: 's' });
+    const grant = svc.signGrant('1', 'totp_enrol');
+    expect(() => svc.verifyGrant(access, 'totp_enrol')).toThrow(/grant/i);
+    expect(() => svc.verify(grant)).toThrow(/access/i);
   });
 });

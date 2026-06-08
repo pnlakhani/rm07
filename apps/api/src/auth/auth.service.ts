@@ -19,6 +19,8 @@ import type {
 
 export const TOS_POLICY_VERSION = 'tos-v1';
 export const PRIVACY_POLICY_VERSION = 'privacy-v1';
+/** Scope of the onboarding grant that authorises TOTP enrol/confirm. */
+export const TOTP_ENROL_SCOPE = 'totp_enrol';
 
 export type AuthErrorCode =
   | 'email_taken'
@@ -84,7 +86,6 @@ export class AuthService {
     if (existing) {
       throw new AuthError('email_taken', 'An account with this email already exists.');
     }
-    // Strength + breach check before any row is written.
     await this.passwords.assertStrong(input.password, this.hibpFetcher);
     const passwordHashArgon2id = await this.passwords.hashPassword(input.password);
 
@@ -113,7 +114,11 @@ export class AuthService {
     return { accountId: account.id };
   }
 
-  async verifySignupOtp(email: string, code: string): Promise<void> {
+  /**
+   * Verify the signup OTP, activate the account, and issue a short-lived enrolment grant that
+   * authorises the TOTP enrol/confirm steps (no full session exists until TOTP is confirmed).
+   */
+  async verifySignupOtp(email: string, code: string): Promise<{ enrolmentToken: string }> {
     const account = await this.accounts.findByEmail(email);
     if (!account) {
       throw new AuthError('otp_invalid');
@@ -121,6 +126,7 @@ export class AuthService {
     const otp = await this.consumeOtpOrThrow(account.id, 'signup_verification', code);
     await this.otps.consume(otp.id, new Date());
     await this.accounts.setStatus(account.id, 'active');
+    return { enrolmentToken: this.jwt.signGrant(account.id.toString(), TOTP_ENROL_SCOPE) };
   }
 
   // --- TOTP enrolment -----------------------------------------------------------------------
@@ -136,7 +142,8 @@ export class AuthService {
     return { secret, keyUri: this.totp.keyUri(secret, account.email) };
   }
 
-  async confirmTotp(accountId: bigint, code: string): Promise<void> {
+  /** Confirm TOTP enrolment with a valid code, then issue the first full session. */
+  async confirmTotp(accountId: bigint, code: string, ctx: RequestContext): Promise<IssuedSession> {
     const factor = await this.mfa.getTotp(accountId, { activeOnly: false });
     if (!factor) {
       throw new AuthError('mfa_not_enrolled');
@@ -146,6 +153,9 @@ export class AuthService {
       throw new AuthError('totp_invalid');
     }
     await this.mfa.activateTotp(factor.id);
+    const issued = await this.issueSessionFor(accountId, ctx);
+    await this.accounts.markSignedIn(accountId, new Date());
+    return issued;
   }
 
   // --- Sign-in + sessions -------------------------------------------------------------------
@@ -194,15 +204,12 @@ export class AuthService {
       await this.sessions.revoke(session.id, new Date());
       throw new AuthError('session_invalid');
     }
-    // Rotate: revoke the old session, mint a fresh one.
     await this.sessions.revoke(session.id, new Date());
     return this.issueSessionFor(session.accountId, ctx);
   }
 
   async logoutAll(accountId: bigint): Promise<void> {
     await this.sessions.revokeAllForAccount(accountId, new Date());
-    // NOTE: broker credential decryption-key rotation (App Flow §3.3) is wired with the broker
-    // ticket; logout-all triggers it there.
   }
 
   // --- Password reset (step-up TOTP) --------------------------------------------------------
@@ -228,7 +235,6 @@ export class AuthService {
     }
     const otp = await this.consumeOtpOrThrow(account.id, 'password_reset', input.code);
 
-    // Step-up TOTP is mandatory and cannot be bypassed (App Flow J-09).
     const factor = await this.mfa.getTotp(account.id, { activeOnly: true });
     if (!factor) {
       throw new AuthError('totp_required');
@@ -242,7 +248,6 @@ export class AuthService {
     const newHash = await this.passwords.hashPassword(input.newPassword);
     await this.accounts.setPasswordHash(account.id, newHash);
     await this.otps.consume(otp.id, new Date());
-    // Invalidate every existing session (Full Doc VII.2: old sessions terminated).
     await this.sessions.revokeAllForAccount(account.id, new Date());
   }
 

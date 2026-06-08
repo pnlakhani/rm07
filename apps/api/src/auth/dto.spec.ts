@@ -44,15 +44,17 @@ describe('auth DTOs', () => {
     expect(signinSchema.safeParse({ email: 'a@b.com', password: 'x', totp: '7' }).success).toBe(false);
   });
 
-  it('validates password-reset confirmation', () => {
+  it('validates password-reset confirmation (email + OTP + TOTP + new password)', () => {
     const ok = passwordResetConfirmSchema.safeParse({
-      token: 'reset-token',
+      email: 'a@b.com',
+      code: '123456',
       totp: '111111',
       newPassword: 'another-strong-passphrase',
     });
     expect(ok.success).toBe(true);
     const badPw = passwordResetConfirmSchema.safeParse({
-      token: 'reset-token',
+      email: 'a@b.com',
+      code: '123456',
       totp: '111111',
       newPassword: 'short',
     });
