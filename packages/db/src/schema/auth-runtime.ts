@@ -1,4 +1,4 @@
-import { bigint, boolean, inet, integer, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, boolean, customType, inet, integer, text, timestamp } from 'drizzle-orm/pg-core';
 import { core } from './namespaces.js';
 import { accounts } from './auth.js';
 
@@ -35,4 +35,25 @@ export const consentRecords = core.table('consent_records', {
   ip: inet('ip'),
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Postgres bytea for the sealed private key. */
+const byteaKey = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
+/**
+ * Per-account ECIES keypair (migration 0003). Public key is served to the browser; the private
+ * key is envelope-sealed at rest and only opened server-side to decrypt a transit payload.
+ */
+export const accountKeys = core.table('account_keys', {
+  accountId: bigint('account_id', { mode: 'bigint' })
+    .primaryKey()
+    .references(() => accounts.id),
+  eciesPublicKey: text('ecies_public_key').notNull(),
+  eciesPrivateKeySealed: byteaKey('ecies_private_key_sealed').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  rotatedAt: timestamp('rotated_at', { withTimezone: true }),
 });

@@ -50,6 +50,9 @@ importers:
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
+      '@rm07/broker-adapters':
+        specifier: workspace:*
+        version: link:../../packages/broker-adapters
       '@rm07/core':
         specifier: workspace:*
         version: link:../../packages/core

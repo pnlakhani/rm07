@@ -113,6 +113,6 @@ const authServiceProvider = {
     ResendEmailSender,
     authServiceProvider,
   ],
-  exports: [AuthService, JwtService],
+  exports: [AuthService, JwtService, JwtAuthGuard, EnrolmentGuard],
 })
 export class AuthModule {}

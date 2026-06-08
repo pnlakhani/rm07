@@ -16,6 +16,7 @@
     "@nestjs/core": "^10.4.4",
     "@nestjs/platform-express": "^10.4.4",
     "@node-rs/argon2": "^2.0.2",
+    "@rm07/broker-adapters": "workspace:*",
     "@rm07/core": "workspace:*",
     "@rm07/db": "workspace:*",
     "drizzle-orm": "^0.33.0",

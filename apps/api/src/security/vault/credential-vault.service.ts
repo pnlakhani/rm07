@@ -64,6 +64,15 @@ export class CredentialVaultService {
     return parsed;
   }
 
+  /**
+   * Decrypt an ECIES transit payload to a raw string map. Used for broker credentials, whose
+   * field names are broker-specific (snake_case) rather than the fixed CredentialFields shape.
+   */
+  decryptTransitRecord(payload: EciesPayload, accountPrivateKeyB64: string): Record<string, string> {
+    const plaintext = eciesDecrypt(payload, accountPrivateKeyB64).toString('utf8');
+    return JSON.parse(plaintext) as Record<string, string>;
+  }
+
   /** Seal credential fields for at-rest storage under a fresh per-connection DEK. */
   seal(fields: CredentialFields): SealedCredentials {
     const dek = generateDek();
