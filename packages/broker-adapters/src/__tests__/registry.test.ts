@@ -33,6 +33,7 @@ const stubAdapter: BrokerAdapter = {
     Promise.resolve({ tradingSymbol: 'X', ltpPaise: 0n, volume: 0n, at: new Date() }),
   placeOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'OPEN' }),
   cancelOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'CANCELLED' }),
+  getOrders: () => Promise.resolve([]),
 };
 
 afterEach(() => _clearRegistry());

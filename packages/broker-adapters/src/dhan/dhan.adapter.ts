@@ -3,6 +3,7 @@ import type {
   BrokerAdapter,
   BrokerAdapterMeta,
   BrokerCredentials,
+  BrokerOrder,
   BrokerSession,
   ExchangeCode,
   Holding,
@@ -46,6 +47,12 @@ interface DhanLtpResponse {
 interface DhanOrderResponse {
   orderId?: string;
   orderStatus?: string;
+}
+interface DhanOrderBookEntry {
+  orderId?: string;
+  orderStatus?: string;
+  filledQty?: number;
+  averageTradedPrice?: number;
 }
 interface DhanError {
   errorMessage?: string;
@@ -177,6 +184,16 @@ export class DhanAdapter implements BrokerAdapter {
       `/orders/${encodeURIComponent(brokerOrderId)}`,
     );
     return { brokerOrderId: res?.orderId ?? brokerOrderId, status: orderStatus(res?.orderStatus ?? 'CANCELLED') };
+  }
+
+  async getOrders(session: BrokerSession): Promise<readonly BrokerOrder[]> {
+    const rows = (await this.request<DhanOrderBookEntry[]>(session, 'GET', '/orders')) ?? [];
+    return rows.map((o) => ({
+      brokerOrderId: o.orderId ?? '',
+      status: orderStatus(o.orderStatus),
+      filledQuantity: o.filledQty ?? 0,
+      avgFillPricePaise: rupeesToPaise(o.averageTradedPrice ?? 0),
+    }));
   }
 
   private async request<T>(

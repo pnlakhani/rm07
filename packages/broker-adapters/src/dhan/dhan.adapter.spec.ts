@@ -165,4 +165,23 @@ describe('DhanAdapter', () => {
     expect(ack).toEqual({ brokerOrderId: '112', status: 'CANCELLED' });
     expect(calls[0]?.method).toBe('DELETE');
   });
+
+  it('reads the order book for reconciliation (status + fills mapped to paise)', async () => {
+    const { fetchImpl, calls } = makeFetch([
+      {
+        path: '/orders',
+        method: 'GET',
+        body: [
+          { orderId: '112', orderStatus: 'TRADED', filledQty: 5, averageTradedPrice: 2900.5 },
+          { orderId: '113', orderStatus: 'PENDING', filledQty: 0 },
+        ],
+      },
+    ]);
+    const orders = await new DhanAdapter(fetchImpl).getOrders(session);
+    expect(orders).toEqual([
+      { brokerOrderId: '112', status: 'COMPLETE', filledQuantity: 5, avgFillPricePaise: 290050n },
+      { brokerOrderId: '113', status: 'OPEN', filledQuantity: 0, avgFillPricePaise: 0n },
+    ]);
+    expect(calls[0]?.method).toBe('GET');
+  });
 });

@@ -98,6 +98,17 @@ export interface OrderAck {
   readonly status: OrderStatus;
 }
 
+/**
+ * A broker order-book entry, consumed by the 60s reconciliation watchdog (Full Doc §III.6) to
+ * detect divergence between `core.orders` and the broker's source-of-truth order book.
+ */
+export interface BrokerOrder {
+  readonly brokerOrderId: string;
+  readonly status: OrderStatus;
+  readonly filledQuantity: number;
+  readonly avgFillPricePaise: bigint;
+}
+
 /** The OHLC interval an adapter can return. */
 export type Interval = '1m' | '5m' | '15m' | '1d';
 
@@ -136,4 +147,7 @@ export interface BrokerAdapter {
 
   placeOrder(session: BrokerSession, input: PlaceOrderInput): Promise<OrderAck>;
   cancelOrder(session: BrokerSession, brokerOrderId: string): Promise<OrderAck>;
+
+  /** The broker's current order book — the source of truth for the reconciliation watchdog. */
+  getOrders(session: BrokerSession): Promise<readonly BrokerOrder[]>;
 }

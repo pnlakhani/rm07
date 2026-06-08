@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { schema, type Database } from '@rm07/db';
 import type { Broker } from '@rm07/core';
 import { DATABASE } from '../db/database.module';
@@ -11,9 +11,14 @@ import type {
   BrokerConnectionsRepository,
   NewOrder,
   OrderRecord,
+  OrderUpdate,
   OrdersRepository,
+  ReconcilableOrder,
   SealedCredentialColumns,
 } from './ports';
+
+/** Non-terminal order statuses worth reconciling against the broker book. */
+const OPEN_ORDER_STATUSES = ['PENDING', 'OPEN', 'PARTIAL'];
 
 @Injectable()
 export class DrizzleAccountKeysRepository implements AccountKeysRepository {
@@ -209,6 +214,46 @@ export class DrizzleOrdersRepository implements OrdersRepository {
     await this.database.db
       .update(schema.orders)
       .set({ status: 'REJECTED', statusMessage: message })
+      .where(eq(schema.orders.id, id));
+  }
+
+  async listReconcilable(): Promise<readonly ReconcilableOrder[]> {
+    const rows = await this.database.db
+      .select({
+        id: schema.orders.id,
+        accountId: schema.orders.accountId,
+        connectionId: schema.orders.connectionId,
+        broker: schema.orders.broker,
+        brokerOrderId: schema.orders.brokerOrderId,
+        status: schema.orders.status,
+        filledQuantity: schema.orders.filledQuantity,
+      })
+      .from(schema.orders)
+      .where(
+        and(
+          inArray(schema.orders.status, OPEN_ORDER_STATUSES),
+          isNotNull(schema.orders.brokerOrderId),
+        ),
+      );
+    return rows.map((r) => ({
+      id: r.id,
+      accountId: r.accountId,
+      connectionId: r.connectionId,
+      broker: r.broker,
+      brokerOrderId: r.brokerOrderId ?? '',
+      status: r.status,
+      filledQuantity: r.filledQuantity,
+    }));
+  }
+
+  async updateFromBroker(id: bigint, update: OrderUpdate): Promise<void> {
+    await this.database.db
+      .update(schema.orders)
+      .set({
+        status: update.status,
+        filledQuantity: update.filledQuantity,
+        avgFillPricePaise: update.avgFillPricePaise,
+      })
       .where(eq(schema.orders.id, id));
   }
 }

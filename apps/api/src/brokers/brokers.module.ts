@@ -7,6 +7,7 @@ import { AccountKeysService } from './account-keys.service';
 import { BrokerAdaptersRegistrar } from './broker-adapters.registrar';
 import { BrokerConnectionService } from './broker-connection.service';
 import { BrokersController } from './brokers.controller';
+import { ReconciliationService } from './reconciliation.service';
 import {
   DrizzleAccountKeysRepository,
   DrizzleBrokerConnectionsRepository,
@@ -32,8 +33,9 @@ import {
     { provide: ORDERS_REPOSITORY, useClass: DrizzleOrdersRepository },
     AccountKeysService,
     BrokerConnectionService,
+    ReconciliationService,
     BrokerAdaptersRegistrar,
   ],
-  exports: [BrokerConnectionService],
+  exports: [BrokerConnectionService, ReconciliationService],
 })
 export class BrokersModule {}

@@ -7,6 +7,7 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "import:instruments": "node dist/scripts/import-instruments.js",
+    "reconcile:orders": "node dist/scripts/reconcile-orders.js",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

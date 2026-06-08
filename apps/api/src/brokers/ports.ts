@@ -73,6 +73,24 @@ export interface OrderRecord {
   readonly status: string;
 }
 
+/** A live order to reconcile against the broker order book (non-terminal, already sent). */
+export interface ReconcilableOrder {
+  readonly id: bigint;
+  readonly accountId: bigint;
+  readonly connectionId: bigint;
+  readonly broker: string;
+  readonly brokerOrderId: string;
+  readonly status: string;
+  readonly filledQuantity: number;
+}
+
+/** Fields updated from the broker's source-of-truth order book. */
+export interface OrderUpdate {
+  readonly status: string;
+  readonly filledQuantity: number;
+  readonly avgFillPricePaise: bigint | null;
+}
+
 export interface OrdersRepository {
   /**
    * Insert a PENDING order. Returns the new row id, or `null` if an order already exists for this
@@ -82,6 +100,9 @@ export interface OrdersRepository {
   findByIdempotencyKey(accountId: bigint, idempotencyKey: string): Promise<OrderRecord | null>;
   markPlaced(id: bigint, brokerOrderId: string, status: string): Promise<void>;
   markRejected(id: bigint, message: string): Promise<void>;
+  /** Non-terminal orders that have a broker order id — candidates for reconciliation. */
+  listReconcilable(): Promise<readonly ReconcilableOrder[]>;
+  updateFromBroker(id: bigint, update: OrderUpdate): Promise<void>;
 }
 
 // DI tokens.

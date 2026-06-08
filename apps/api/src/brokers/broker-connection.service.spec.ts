@@ -22,6 +22,7 @@ import type {
   NewOrder,
   OrderRecord,
   OrdersRepository,
+  ReconcilableOrder,
   SealedCredentialColumns,
 } from './ports';
 
@@ -138,6 +139,12 @@ class FakeOrders implements OrdersRepository {
     }
     return Promise.resolve();
   }
+  listReconcilable(): Promise<readonly ReconcilableOrder[]> {
+    return Promise.resolve([]);
+  }
+  updateFromBroker(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 const stubDhan: BrokerAdapter = {
@@ -170,6 +177,7 @@ const stubDhan: BrokerAdapter = {
   getQuote: () => Promise.resolve({ tradingSymbol: 'RELIANCE', ltpPaise: 290050n, volume: 0n, at: new Date() }),
   placeOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'OPEN' }),
   cancelOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'CANCELLED' }),
+  getOrders: () => Promise.resolve([]),
 };
 
 function makeHarness() {
