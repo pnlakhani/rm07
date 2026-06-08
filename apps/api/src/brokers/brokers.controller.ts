@@ -22,6 +22,7 @@ import {
   type ConnectionView,
   type HoldingView,
   type OrderAckView,
+  type OrderView,
   type QuoteView,
 } from './broker-connection.service';
 import { BrokerExceptionFilter } from './broker-exception.filter';
@@ -134,5 +135,18 @@ export class BrokersController {
         ? { triggerPricePaise: BigInt(body.triggerPricePaise) }
         : {}),
     });
+  }
+
+  /** Order history for a connection (from our ledger). */
+  @Get(':id/orders')
+  @HttpCode(HttpStatus.OK)
+  async orders(
+    @Param('id') id: string,
+    @CurrentAccount() account: AuthContext,
+  ): Promise<readonly OrderView[]> {
+    if (!/^\d+$/u.test(id)) {
+      throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
+    }
+    return this.connections.listOrders(account.accountId, BigInt(id));
   }
 }

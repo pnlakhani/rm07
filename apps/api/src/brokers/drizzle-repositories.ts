@@ -10,6 +10,7 @@ import type {
   BrokerConnectionStatus,
   BrokerConnectionsRepository,
   NewOrder,
+  OrderHistoryRow,
   OrderRecord,
   OrderUpdate,
   OrdersRepository,
@@ -255,6 +256,48 @@ export class DrizzleOrdersRepository implements OrdersRepository {
         avgFillPricePaise: update.avgFillPricePaise,
       })
       .where(eq(schema.orders.id, id));
+  }
+
+  async listByConnection(
+    accountId: bigint,
+    connectionId: bigint,
+    limit: number,
+  ): Promise<readonly OrderHistoryRow[]> {
+    const rows = await this.database.db
+      .select({
+        id: schema.orders.id,
+        exchange: schema.orders.exchange,
+        tradingSymbol: schema.orders.tradingSymbol,
+        side: schema.orders.side,
+        orderType: schema.orders.orderType,
+        product: schema.orders.product,
+        quantity: schema.orders.quantity,
+        status: schema.orders.status,
+        brokerOrderId: schema.orders.brokerOrderId,
+        pricePaise: schema.orders.pricePaise,
+        filledQuantity: schema.orders.filledQuantity,
+        createdAt: schema.orders.createdAt,
+      })
+      .from(schema.orders)
+      .where(
+        and(eq(schema.orders.accountId, accountId), eq(schema.orders.connectionId, connectionId)),
+      )
+      .orderBy(desc(schema.orders.createdAt))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      exchange: r.exchange,
+      tradingSymbol: r.tradingSymbol,
+      side: r.side,
+      orderType: r.orderType,
+      product: r.product,
+      quantity: r.quantity,
+      status: r.status,
+      brokerOrderId: r.brokerOrderId ?? null,
+      pricePaise: r.pricePaise ?? null,
+      filledQuantity: r.filledQuantity,
+      createdAt: r.createdAt,
+    }));
   }
 }
 

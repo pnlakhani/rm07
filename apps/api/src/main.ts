@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -16,10 +16,8 @@ async function bootstrap(): Promise<void> {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.enableCors({ origin: env.API_CORS_ORIGINS, credentials: true });
 
-  // Reject unknown fields at the boundary (TRD §6.2).
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-  );
+  // Request validation is done per-route with ZodValidationPipe over `.strict()` schemas, which
+  // reject unknown fields at the boundary (TRD §6.2) — so no global class-validator ValidationPipe.
   app.useGlobalFilters(new ProblemDetailsFilter());
 
   await app.listen(env.API_PORT, '0.0.0.0');

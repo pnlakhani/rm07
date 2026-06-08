@@ -75,6 +75,22 @@ export interface OrderAckView {
   readonly status: OrderStatus;
 }
 
+/** JSON-safe order-history row (paise as strings; timestamps as ISO strings). */
+export interface OrderView {
+  readonly id: string;
+  readonly exchange: string;
+  readonly tradingSymbol: string;
+  readonly side: string;
+  readonly orderType: string;
+  readonly product: string;
+  readonly quantity: number;
+  readonly status: string;
+  readonly brokerOrderId: string | null;
+  readonly pricePaise: string | null;
+  readonly filledQuantity: number;
+  readonly createdAt: string;
+}
+
 /**
  * Connect-Broker flow (App Flow J-02/J-03, Full Doc VII.3, Hard rule #4):
  *  1. decrypt the ECIES transit payload with the account's private key (in-process only),
@@ -312,6 +328,29 @@ export class BrokerConnectionService {
     }
     await this.orders.markPlaced(orderRowId, ack.brokerOrderId, ack.status);
     return { brokerOrderId: ack.brokerOrderId, status: ack.status };
+  }
+
+  /** Order history for a connection (App Flow J-04). Reads our `core.orders` ledger, not the broker. */
+  async listOrders(accountId: bigint, connectionId: bigint): Promise<readonly OrderView[]> {
+    const conn = await this.connections.findById(connectionId);
+    if (!conn || conn.accountId !== accountId) {
+      throw new BrokerError('connection_not_found');
+    }
+    const rows = await this.orders.listByConnection(accountId, connectionId, 50);
+    return rows.map((r) => ({
+      id: r.id.toString(),
+      exchange: r.exchange,
+      tradingSymbol: r.tradingSymbol,
+      side: r.side,
+      orderType: r.orderType,
+      product: r.product,
+      quantity: r.quantity,
+      status: r.status,
+      brokerOrderId: r.brokerOrderId,
+      pricePaise: r.pricePaise !== null ? r.pricePaise.toString() : null,
+      filledQuantity: r.filledQuantity,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   private resolveAdapter(broker: Broker): ReturnType<typeof getAdapter> {

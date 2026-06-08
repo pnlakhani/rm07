@@ -49,6 +49,21 @@ export interface BrokerConnection {
   status: string;
 }
 
+export interface OrderHistoryItem {
+  id: string;
+  exchange: string;
+  tradingSymbol: string;
+  side: string;
+  orderType: string;
+  product: string;
+  quantity: number;
+  status: string;
+  brokerOrderId: string | null;
+  pricePaise: string | null;
+  filledQuantity: number;
+  createdAt: string;
+}
+
 export const authApi = {
   signup: (email: string, password: string): Promise<{ status: string }> =>
     request('/v1/auth/signup', { method: 'POST', body: { email, password } }),
@@ -72,4 +87,6 @@ export const billingApi = {
 
 export const brokersApi = {
   list: (token: string): Promise<BrokerConnection[]> => request('/v1/brokers', { token }),
+  listOrders: (token: string, connectionId: string): Promise<OrderHistoryItem[]> =>
+    request(`/v1/brokers/${connectionId}/orders`, { token }),
 };

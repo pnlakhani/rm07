@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../db/database.module';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
+import { RequiresPlanGuard } from './requires-plan.guard';
 import {
   DrizzleSubscriptionsRepository,
   DrizzleWebhookEventsRepository,
@@ -51,7 +52,8 @@ const razorpayConfigProvider = {
     { provide: SUBSCRIPTIONS_REPOSITORY, useClass: DrizzleSubscriptionsRepository },
     { provide: WEBHOOK_EVENTS_REPOSITORY, useClass: DrizzleWebhookEventsRepository },
     BillingService,
+    RequiresPlanGuard,
   ],
-  exports: [BillingService],
+  exports: [BillingService, RequiresPlanGuard],
 })
 export class BillingModule {}

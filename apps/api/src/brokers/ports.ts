@@ -91,6 +91,22 @@ export interface OrderUpdate {
   readonly avgFillPricePaise: bigint | null;
 }
 
+/** A row of order history for a connection (most-recent-first). */
+export interface OrderHistoryRow {
+  readonly id: bigint;
+  readonly exchange: string;
+  readonly tradingSymbol: string;
+  readonly side: string;
+  readonly orderType: string;
+  readonly product: string;
+  readonly quantity: number;
+  readonly status: string;
+  readonly brokerOrderId: string | null;
+  readonly pricePaise: bigint | null;
+  readonly filledQuantity: number;
+  readonly createdAt: Date;
+}
+
 export interface OrdersRepository {
   /**
    * Insert a PENDING order. Returns the new row id, or `null` if an order already exists for this
@@ -103,6 +119,12 @@ export interface OrdersRepository {
   /** Non-terminal orders that have a broker order id — candidates for reconciliation. */
   listReconcilable(): Promise<readonly ReconcilableOrder[]>;
   updateFromBroker(id: bigint, update: OrderUpdate): Promise<void>;
+  /** Order history for a connection, most recent first (capped at `limit`). */
+  listByConnection(
+    accountId: bigint,
+    connectionId: bigint,
+    limit: number,
+  ): Promise<readonly OrderHistoryRow[]>;
 }
 
 // DI tokens.

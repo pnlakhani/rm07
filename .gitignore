@@ -22,6 +22,8 @@ coverage/
 !.env.example
 *.pem
 *.key
+# Local dev launcher — holds DB password + dev secrets
+run-api.bat
 
 # Python
 __pycache__/

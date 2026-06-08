@@ -20,6 +20,7 @@ import type {
   BrokerConnectionStatus,
   BrokerConnectionsRepository,
   NewOrder,
+  OrderHistoryRow,
   OrderRecord,
   OrdersRepository,
   ReconcilableOrder,
@@ -144,6 +145,9 @@ class FakeOrders implements OrdersRepository {
   }
   updateFromBroker(): Promise<void> {
     return Promise.resolve();
+  }
+  listByConnection(): Promise<readonly OrderHistoryRow[]> {
+    return Promise.resolve([]);
   }
 }
 
@@ -393,5 +397,58 @@ describe('BrokerConnectionService', () => {
       h.service.placeOrder(1n, BigInt(view.id), { ...marketOrder }),
     ).rejects.toMatchObject({ code: 'broker_verify_failed' });
     expect(h.ordersRepo.rows[0]?.status).toBe('REJECTED');
+  });
+
+  it('lists order history for a connection (paise + timestamps as strings)', async () => {
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    const instruments = {
+      resolveSecurityId: () => Promise.resolve('2885'),
+    } as unknown as InstrumentResolverService;
+    const orders = {
+      listByConnection: () =>
+        Promise.resolve([
+          {
+            id: 9n,
+            exchange: 'NSE',
+            tradingSymbol: 'RELIANCE',
+            side: 'BUY',
+            orderType: 'LIMIT',
+            product: 'CNC',
+            quantity: 5,
+            status: 'COMPLETE',
+            brokerOrderId: '112',
+            pricePaise: 290050n,
+            filledQuantity: 5,
+            createdAt: new Date('2026-06-08T00:00:00.000Z'),
+          },
+        ]),
+    } as unknown as OrdersRepository;
+    const svc = new BrokerConnectionService(h.accountKeys, h.connsRepo, h.vault, instruments, orders);
+    const list = await svc.listOrders(1n, BigInt(view.id));
+    expect(list).toEqual([
+      {
+        id: '9',
+        exchange: 'NSE',
+        tradingSymbol: 'RELIANCE',
+        side: 'BUY',
+        orderType: 'LIMIT',
+        product: 'CNC',
+        quantity: 5,
+        status: 'COMPLETE',
+        brokerOrderId: '112',
+        pricePaise: '290050',
+        filledQuantity: 5,
+        createdAt: '2026-06-08T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it("rejects another account's order history", async () => {
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    await expect(h.service.listOrders(2n, BigInt(view.id))).rejects.toMatchObject({
+      code: 'connection_not_found',
+    });
   });
 });

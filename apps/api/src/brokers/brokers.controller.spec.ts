@@ -23,6 +23,11 @@ function make() {
       .fn()
       .mockResolvedValue({ tradingSymbol: 'RELIANCE', exchange: 'NSE', ltpPaise: '290050', at: '2026-06-08T00:00:00.000Z' }),
     placeOrder: vi.fn().mockResolvedValue({ brokerOrderId: 'O1', status: 'OPEN' }),
+    listOrders: vi
+      .fn()
+      .mockResolvedValue([
+        { id: '9', exchange: 'NSE', tradingSymbol: 'RELIANCE', side: 'BUY', orderType: 'MARKET', product: 'CNC', quantity: 1, status: 'COMPLETE', brokerOrderId: '112', pricePaise: null, filledQuantity: 1, createdAt: '2026-06-08T00:00:00.000Z' },
+      ]),
   } as unknown as BrokerConnectionService;
   return { controller: new BrokersController(accountKeys, connections), accountKeys, connections };
 }
@@ -112,5 +117,17 @@ describe('BrokersController', () => {
   it('rejects an order on a non-numeric id', async () => {
     const { controller } = make();
     await expect(controller.placeOrder('abc', order, account)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('returns order history for a connection', async () => {
+    const { controller, connections } = make();
+    const out = await controller.orders('1', account);
+    expect(out[0]?.tradingSymbol).toBe('RELIANCE');
+    expect(connections.listOrders).toHaveBeenCalledWith(7n, 1n);
+  });
+
+  it('rejects order history on a non-numeric id', async () => {
+    const { controller } = make();
+    await expect(controller.orders('abc', account)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
