@@ -20,6 +20,13 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   /** From-address for transactional email. */
   EMAIL_FROM: z.string().default('RM07 <no-reply@rm07.local>'),
+  /** Razorpay API key id + secret for the subscription engine (Doppler). */
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  /** Razorpay webhook signing secret — verifies inbound webhook authenticity (S-14). */
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  /** JSON map of our plan id -> Razorpay plan id, e.g. {"basic":"plan_x","pro":"plan_y"}. */
+  RAZORPAY_PLAN_MAP: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

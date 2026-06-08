@@ -8,7 +8,9 @@ import { ProblemDetailsFilter } from './common/problem-details.filter';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  // `rawBody: true` captures the unparsed request body so the Razorpay webhook can verify its
+  // HMAC signature against the exact bytes Razorpay signed (S-14).
+  const app = await NestFactory.create(AppModule, { bufferLogs: false, rawBody: true });
 
   // Transport / header hardening (TRD §9).
   app.use(helmet({ contentSecurityPolicy: false }));
