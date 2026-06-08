@@ -1,5 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { getAdapter, type ExchangeCode, type Holding } from '@rm07/broker-adapters';
+import {
+  getAdapter,
+  type ExchangeCode,
+  type Holding,
+  type OrderAck,
+  type OrderSide,
+  type OrderStatus,
+  type OrderType,
+  type OrderValidity,
+  type PlaceOrderInput,
+  type ProductCode,
+} from '@rm07/broker-adapters';
 import type { Broker } from '@rm07/core';
 import {
   CredentialVaultService,
@@ -40,6 +51,26 @@ export interface QuoteView {
   readonly exchange: string;
   readonly ltpPaise: string;
   readonly at: string;
+}
+
+/** Domain command for placing an order (paise as bigint; resolved/validated upstream). */
+export interface PlaceOrderCommand {
+  readonly tradingSymbol: string;
+  readonly exchange: ExchangeCode;
+  readonly side: OrderSide;
+  readonly quantity: number;
+  readonly orderType: OrderType;
+  readonly product: ProductCode;
+  readonly validity: OrderValidity;
+  readonly pricePaise?: bigint;
+  readonly triggerPricePaise?: bigint;
+  readonly idempotencyKey: string;
+}
+
+/** JSON-safe order acknowledgement. */
+export interface OrderAckView {
+  readonly brokerOrderId: string;
+  readonly status: OrderStatus;
 }
 
 /**
@@ -192,6 +223,60 @@ export class BrokerConnectionService {
       ltpPaise: quote.ltpPaise.toString(),
       at: quote.at.toISOString(),
     };
+  }
+
+  /**
+   * Place an order on a connection's broker (App Flow J-04). Resolves the broker-side securityId
+   * from the instrument master, opens credentials at the call moment, and forwards the order.
+   *
+   * NOTE (Hard rule #2): `idempotencyKey` is required and forwarded to the broker as a correlation
+   * id. Durable server-side replay-dedup (the core.orders ledger) is a later ticket; until it
+   * lands, a retried POST with the same key is de-duped by the broker, not by us.
+   */
+  async placeOrder(
+    accountId: bigint,
+    connectionId: bigint,
+    input: PlaceOrderCommand,
+  ): Promise<OrderAckView> {
+    const conn = await this.connections.findById(connectionId);
+    if (!conn || conn.accountId !== accountId) {
+      throw new BrokerError('connection_not_found');
+    }
+    const securityId = await this.instruments.resolveSecurityId(
+      conn.broker,
+      input.exchange,
+      input.tradingSymbol,
+    );
+    if (!securityId) {
+      throw new BrokerError('instrument_not_found');
+    }
+    const credentials = await this.openCredentials(accountId, connectionId);
+    const adapter = this.resolveAdapter(conn.broker);
+    const session = {
+      clientId: credentials['client_id'] ?? conn.clientId ?? '',
+      accessToken: credentials['access_token'] ?? '',
+      tokenExpiresAt: null,
+    };
+    const orderInput: PlaceOrderInput = {
+      tradingSymbol: input.tradingSymbol,
+      exchange: input.exchange,
+      securityId,
+      side: input.side,
+      quantity: input.quantity,
+      orderType: input.orderType,
+      product: input.product,
+      validity: input.validity,
+      idempotencyKey: input.idempotencyKey,
+      ...(input.pricePaise !== undefined ? { pricePaise: input.pricePaise } : {}),
+      ...(input.triggerPricePaise !== undefined ? { triggerPricePaise: input.triggerPricePaise } : {}),
+    };
+    let ack: OrderAck;
+    try {
+      ack = await adapter.placeOrder(session, orderInput);
+    } catch (err) {
+      throw new BrokerError('broker_verify_failed', err instanceof Error ? err.message : undefined);
+    }
+    return { brokerOrderId: ack.brokerOrderId, status: ack.status };
   }
 
   private resolveAdapter(broker: Broker): ReturnType<typeof getAdapter> {

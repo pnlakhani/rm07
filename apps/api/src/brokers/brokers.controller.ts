@@ -21,10 +21,16 @@ import {
   BrokerConnectionService,
   type ConnectionView,
   type HoldingView,
+  type OrderAckView,
   type QuoteView,
 } from './broker-connection.service';
 import { BrokerExceptionFilter } from './broker-exception.filter';
-import { connectBrokerSchema, type ConnectBrokerDto } from './dto';
+import {
+  connectBrokerSchema,
+  placeOrderSchema,
+  type ConnectBrokerDto,
+  type PlaceOrderDto,
+} from './dto';
 import type { ExchangeCode } from '@rm07/broker-adapters';
 
 const EXCHANGE_CODES = new Set(['NSE', 'BSE', 'MCX', 'NFO', 'BFO', 'CDS']);
@@ -100,6 +106,33 @@ export class BrokersController {
     return this.connections.getQuote(account.accountId, BigInt(id), {
       symbol,
       exchange: exchange as ExchangeCode,
+    });
+  }
+
+  /** Place an order on a connection's broker (App Flow J-04). */
+  @Post(':id/orders')
+  @HttpCode(HttpStatus.CREATED)
+  async placeOrder(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(placeOrderSchema)) body: PlaceOrderDto,
+    @CurrentAccount() account: AuthContext,
+  ): Promise<OrderAckView> {
+    if (!/^\d+$/u.test(id)) {
+      throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
+    }
+    return this.connections.placeOrder(account.accountId, BigInt(id), {
+      tradingSymbol: body.tradingSymbol,
+      exchange: body.exchange,
+      side: body.side,
+      quantity: body.quantity,
+      orderType: body.orderType,
+      product: body.product,
+      validity: body.validity,
+      idempotencyKey: body.idempotencyKey,
+      ...(body.pricePaise !== undefined ? { pricePaise: BigInt(body.pricePaise) } : {}),
+      ...(body.triggerPricePaise !== undefined
+        ? { triggerPricePaise: BigInt(body.triggerPricePaise) }
+        : {}),
     });
   }
 }

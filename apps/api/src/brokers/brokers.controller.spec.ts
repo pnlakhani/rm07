@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrokersController } from './brokers.controller';
 import type { AccountKeysService } from './account-keys.service';
 import type { BrokerConnectionService } from './broker-connection.service';
+import type { PlaceOrderDto } from './dto';
 import type { AuthContext } from '../auth/request-context';
 
 const account: AuthContext = { accountId: 7n };
@@ -21,6 +22,7 @@ function make() {
     getQuote: vi
       .fn()
       .mockResolvedValue({ tradingSymbol: 'RELIANCE', exchange: 'NSE', ltpPaise: '290050', at: '2026-06-08T00:00:00.000Z' }),
+    placeOrder: vi.fn().mockResolvedValue({ brokerOrderId: 'O1', status: 'OPEN' }),
   } as unknown as BrokerConnectionService;
   return { controller: new BrokersController(accountKeys, connections), accountKeys, connections };
 }
@@ -73,5 +75,42 @@ describe('BrokersController', () => {
   it('rejects an invalid exchange on quote', async () => {
     const { controller } = make();
     await expect(controller.quote('1', 'RELIANCE', 'BOGUS', account)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  const order: PlaceOrderDto = {
+    tradingSymbol: 'RELIANCE',
+    exchange: 'NSE',
+    side: 'BUY',
+    quantity: 1,
+    orderType: 'MARKET',
+    product: 'CNC',
+    validity: 'DAY',
+    idempotencyKey: 'idem-12345',
+  };
+
+  it('places an order and forwards the mapped command', async () => {
+    const { controller, connections } = make();
+    const out = await controller.placeOrder('1', order, account);
+    expect(out).toMatchObject({ brokerOrderId: 'O1', status: 'OPEN' });
+    expect(connections.placeOrder).toHaveBeenCalledWith(
+      7n,
+      1n,
+      expect.objectContaining({ tradingSymbol: 'RELIANCE', side: 'BUY', orderType: 'MARKET' }),
+    );
+  });
+
+  it('converts paise strings to bigint for the command', async () => {
+    const { controller, connections } = make();
+    await controller.placeOrder('1', { ...order, orderType: 'LIMIT', pricePaise: '290050' }, account);
+    expect(connections.placeOrder).toHaveBeenCalledWith(
+      7n,
+      1n,
+      expect.objectContaining({ pricePaise: 290050n }),
+    );
+  });
+
+  it('rejects an order on a non-numeric id', async () => {
+    const { controller } = make();
+    await expect(controller.placeOrder('abc', order, account)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
