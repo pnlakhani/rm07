@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { getAdapter } from '@rm07/broker-adapters';
+import { getAdapter, type Holding } from '@rm07/broker-adapters';
 import type { Broker } from '@rm07/core';
 import {
   CredentialVaultService,
@@ -21,6 +21,16 @@ export interface ConnectionView {
   readonly broker: Broker;
   readonly clientId: string | null;
   readonly status: string;
+}
+
+/** JSON-safe holding (paise as strings — bigint is not JSON-serialisable). */
+export interface HoldingView {
+  readonly tradingSymbol: string;
+  readonly exchange: string;
+  readonly quantity: number;
+  readonly avgPricePaise: string;
+  readonly ltpPaise: string;
+  readonly isin?: string;
 }
 
 /**
@@ -104,6 +114,35 @@ export class BrokerConnectionService {
     }
     const credentials = this.vault.open(columnsToSealed(columns));
     return reassembleBrokerFields(conn.clientId, credentials);
+  }
+
+  /** Fetch live holdings from the broker for a connection (App Flow J-02 acceptance). */
+  async getHoldings(accountId: bigint, connectionId: bigint): Promise<readonly HoldingView[]> {
+    const conn = await this.connections.findById(connectionId);
+    if (!conn || conn.accountId !== accountId) {
+      throw new BrokerError('connection_not_found');
+    }
+    const credentials = await this.openCredentials(accountId, connectionId);
+    const adapter = this.resolveAdapter(conn.broker);
+    const session = {
+      clientId: credentials['client_id'] ?? conn.clientId ?? '',
+      accessToken: credentials['access_token'] ?? '',
+      tokenExpiresAt: null,
+    };
+    let holdings: readonly Holding[];
+    try {
+      holdings = await adapter.getHoldings(session);
+    } catch (err) {
+      throw new BrokerError('broker_verify_failed', err instanceof Error ? err.message : undefined);
+    }
+    return holdings.map((h) => ({
+      tradingSymbol: h.tradingSymbol,
+      exchange: h.exchange,
+      quantity: h.quantity,
+      avgPricePaise: h.avgPricePaise.toString(),
+      ltpPaise: h.ltpPaise.toString(),
+      ...(h.isin ? { isin: h.isin } : {}),
+    }));
   }
 
   private resolveAdapter(broker: Broker): ReturnType<typeof getAdapter> {

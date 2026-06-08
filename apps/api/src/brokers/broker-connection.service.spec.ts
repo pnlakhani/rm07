@@ -107,7 +107,10 @@ const stubDhan: BrokerAdapter = {
           tokenExpiresAt: null,
         }),
   verifySession: () => Promise.resolve(true),
-  getHoldings: () => Promise.resolve([]),
+  getHoldings: () =>
+    Promise.resolve([
+      { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: 265500n, ltpPaise: 0n },
+    ]),
   getPositions: () => Promise.resolve([]),
   getQuote: () => Promise.resolve({ tradingSymbol: 'X', ltpPaise: 0n, volume: 0n, at: new Date() }),
   placeOrder: () => Promise.resolve({ brokerOrderId: 'o', status: 'OPEN' }),
@@ -198,5 +201,14 @@ describe('BrokerConnectionService', () => {
 
   it('requires an account key before connect', async () => {
     expect(() => h.accountKeys.getPrivateKey(99n)).rejects.toBeInstanceOf(BrokerError);
+  });
+
+  it('fetches live holdings via the adapter (paise as strings)', async () => {
+    const payload = await encryptedPayload(h, 1n, { client_id: 'CID-1', access_token: 'T' });
+    const view = await h.service.connect(1n, 'dhan', payload);
+    const holdings = await h.service.getHoldings(1n, BigInt(view.id));
+    expect(holdings).toEqual([
+      { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: '265500', ltpPaise: '0' },
+    ]);
   });
 });

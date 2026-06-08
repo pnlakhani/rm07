@@ -76,6 +76,8 @@ export interface Position {
 export interface PlaceOrderInput {
   readonly tradingSymbol: string;
   readonly exchange: ExchangeCode;
+  /** Broker-side instrument id (e.g. Dhan securityId), resolved from the instrument master. */
+  readonly securityId?: string;
   readonly side: OrderSide;
   readonly quantity: number;
   readonly orderType: OrderType;
@@ -98,6 +100,13 @@ export interface OrderAck {
 
 /** The OHLC interval an adapter can return. */
 export type Interval = '1m' | '5m' | '15m' | '1d';
+
+/** Reference to an instrument for a quote — carries the broker-side id when known. */
+export interface InstrumentRef {
+  readonly tradingSymbol: string;
+  readonly exchange: ExchangeCode;
+  readonly securityId?: string;
+}
 
 export interface Quote {
   readonly tradingSymbol: string;
@@ -123,7 +132,7 @@ export interface BrokerAdapter {
 
   getHoldings(session: BrokerSession): Promise<readonly Holding[]>;
   getPositions(session: BrokerSession): Promise<readonly Position[]>;
-  getQuote(session: BrokerSession, tradingSymbol: string, exchange: ExchangeCode): Promise<Quote>;
+  getQuote(session: BrokerSession, instrument: InstrumentRef): Promise<Quote>;
 
   placeOrder(session: BrokerSession, input: PlaceOrderInput): Promise<OrderAck>;
   cancelOrder(session: BrokerSession, brokerOrderId: string): Promise<OrderAck>;

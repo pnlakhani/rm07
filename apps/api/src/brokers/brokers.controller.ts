@@ -16,7 +16,11 @@ import { CurrentAccount } from '../auth/current-account.decorator';
 import { JwtAuthGuard } from '../auth/guards';
 import type { AuthContext } from '../auth/request-context';
 import { AccountKeysService } from './account-keys.service';
-import { BrokerConnectionService, type ConnectionView } from './broker-connection.service';
+import {
+  BrokerConnectionService,
+  type ConnectionView,
+  type HoldingView,
+} from './broker-connection.service';
 import { BrokerExceptionFilter } from './broker-exception.filter';
 import { connectBrokerSchema, type ConnectBrokerDto } from './dto';
 
@@ -58,5 +62,18 @@ export class BrokersController {
       throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
     }
     await this.connections.disconnect(account.accountId, BigInt(id));
+  }
+
+  /** Live holdings for a connection (App Flow J-02). */
+  @Get(':id/holdings')
+  @HttpCode(HttpStatus.OK)
+  async holdings(
+    @Param('id') id: string,
+    @CurrentAccount() account: AuthContext,
+  ): Promise<readonly HoldingView[]> {
+    if (!/^\d+$/u.test(id)) {
+      throw new BadRequestException({ title: 'Invalid connection id', code: 'request.invalid' });
+    }
+    return this.connections.getHoldings(account.accountId, BigInt(id));
   }
 }

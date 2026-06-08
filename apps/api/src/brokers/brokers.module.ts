@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../db/database.module';
 import { SecurityModule } from '../security/security.module';
 import { AccountKeysService } from './account-keys.service';
+import { BrokerAdaptersRegistrar } from './broker-adapters.registrar';
 import { BrokerConnectionService } from './broker-connection.service';
 import { BrokersController } from './brokers.controller';
 import {
@@ -24,6 +25,7 @@ import { ACCOUNT_KEYS_REPOSITORY, BROKER_CONNECTIONS_REPOSITORY } from './ports'
     { provide: BROKER_CONNECTIONS_REPOSITORY, useClass: DrizzleBrokerConnectionsRepository },
     AccountKeysService,
     BrokerConnectionService,
+    BrokerAdaptersRegistrar,
   ],
   exports: [BrokerConnectionService],
 })

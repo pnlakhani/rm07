@@ -13,6 +13,11 @@ function make() {
     connect: vi.fn().mockResolvedValue({ id: '1', broker: 'dhan', clientId: 'C', status: 'active' }),
     list: vi.fn().mockResolvedValue([{ id: '1', broker: 'dhan', clientId: 'C', status: 'active' }]),
     disconnect: vi.fn().mockResolvedValue(undefined),
+    getHoldings: vi
+      .fn()
+      .mockResolvedValue([
+        { tradingSymbol: 'RELIANCE', exchange: 'NSE', quantity: 10, avgPricePaise: '265500', ltpPaise: '0' },
+      ]),
   } as unknown as BrokerConnectionService;
   return { controller: new BrokersController(accountKeys, connections), accountKeys, connections };
 }
@@ -46,5 +51,12 @@ describe('BrokersController', () => {
   it('rejects a non-numeric id', async () => {
     const { controller } = make();
     await expect(controller.disconnect('abc', account)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('returns live holdings', async () => {
+    const { controller, connections } = make();
+    const out = await controller.holdings('1', account);
+    expect(out[0]?.tradingSymbol).toBe('RELIANCE');
+    expect(connections.getHoldings).toHaveBeenCalledWith(7n, 1n);
   });
 });
