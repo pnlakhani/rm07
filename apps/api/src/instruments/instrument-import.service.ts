@@ -20,15 +20,34 @@ export class InstrumentImportService {
   /** Parse a Dhan scrip-master CSV and upsert it; returns the number of rows written. */
   async importDhanCsv(csv: string): Promise<number> {
     const scrips = parseDhanScripMaster(csv);
-    const rows: BrokerInstrumentRow[] = scrips.map((s) => ({
-      broker: 'dhan',
-      exchange: dhanExchangeToCode(s.exchange, s.segment),
-      tradingSymbol: s.tradingSymbol,
-      securityId: s.securityId,
-      symbolName: s.symbolName || null,
-      instrumentType: s.instrumentType || null,
-      lotSize: s.lotSize,
-    }));
+
+    // Dhan's master contains rows that collapse to the same (broker, exchange, tradingSymbol)
+    // key (the table's unique key + the resolver lookup key). Postgres rejects an INSERT ...
+    // ON CONFLICT batch that touches the same row twice, so we dedupe up front. Last write wins,
+    // which keeps the import deterministic against the source ordering.
+    const byKey = new Map<string, BrokerInstrumentRow>();
+    for (const s of scrips) {
+      const exchange = dhanExchangeToCode(s.exchange, s.segment);
+      const key = `dhan|${exchange}|${s.tradingSymbol}`;
+      byKey.set(key, {
+        broker: 'dhan',
+        exchange,
+        tradingSymbol: s.tradingSymbol,
+        securityId: s.securityId,
+        symbolName: s.symbolName || null,
+        instrumentType: s.instrumentType || null,
+        lotSize: s.lotSize,
+      });
+    }
+
+    const rows = [...byKey.values()];
+    const dropped = scrips.length - rows.length;
+    if (dropped > 0) {
+      this.logger.warn(
+        `Deduplicated ${dropped} duplicate (exchange, tradingSymbol) rows from Dhan scrip master`,
+      );
+    }
+
     const written = await this.repo.upsertMany(rows);
     this.logger.log(`Imported ${written} Dhan instruments`);
     return written;
