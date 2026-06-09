@@ -13,6 +13,7 @@ export * from './auth-runtime.js';
 export * from './market.js';
 export * from './trading.js';
 export * from './billing.js';
+export * from './watchlists.js';
 
 /** Single-row schema version; backend verifies expected version on startup (Backend Schema §12). */
 export const schemaVersion = core.table('schema_version', {

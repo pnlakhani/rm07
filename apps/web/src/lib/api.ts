@@ -102,6 +102,39 @@ export const billingApi = {
     request('/v1/billing/subscription', { token }),
 };
 
+export interface WatchlistItem {
+  id: string;
+  exchange: string;
+  tradingSymbol: string;
+}
+
+export interface Watchlist {
+  id: string;
+  name: string;
+  items: WatchlistItem[];
+}
+
+export const watchlistsApi = {
+  list: (token: string): Promise<Watchlist[]> => request('/v1/watchlists', { token }),
+  create: (token: string, name: string): Promise<Watchlist> =>
+    request('/v1/watchlists', { method: 'POST', token, body: { name } }),
+  remove: (token: string, id: string): Promise<void> =>
+    request(`/v1/watchlists/${id}`, { method: 'DELETE', token }),
+  addItem: (
+    token: string,
+    id: string,
+    exchange: string,
+    tradingSymbol: string,
+  ): Promise<{ status: string }> =>
+    request(`/v1/watchlists/${id}/items`, {
+      method: 'POST',
+      token,
+      body: { exchange, tradingSymbol },
+    }),
+  removeItem: (token: string, id: string, itemId: string): Promise<void> =>
+    request(`/v1/watchlists/${id}/items/${itemId}`, { method: 'DELETE', token }),
+};
+
 export const brokersApi = {
   list: (token: string): Promise<BrokerConnection[]> => request('/v1/brokers', { token }),
   connectKey: (token: string): Promise<{ publicKey: string }> =>
