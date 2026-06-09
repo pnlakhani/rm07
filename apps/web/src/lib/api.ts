@@ -49,6 +49,23 @@ export interface BrokerConnection {
   status: string;
 }
 
+export interface Holding {
+  tradingSymbol: string;
+  exchange: string;
+  quantity: number;
+  avgPricePaise: string;
+  ltpPaise: string;
+  isin?: string;
+}
+
+export interface EciesPayloadDto {
+  epk: string;
+  salt: string;
+  iv: string;
+  tag: string;
+  ct: string;
+}
+
 export interface OrderHistoryItem {
   id: string;
   exchange: string;
@@ -87,6 +104,12 @@ export const billingApi = {
 
 export const brokersApi = {
   list: (token: string): Promise<BrokerConnection[]> => request('/v1/brokers', { token }),
+  connectKey: (token: string): Promise<{ publicKey: string }> =>
+    request('/v1/brokers/connect-key', { token }),
+  connect: (token: string, broker: string, payload: EciesPayloadDto): Promise<BrokerConnection> =>
+    request('/v1/brokers/connect', { method: 'POST', token, body: { broker, payload } }),
+  holdings: (token: string, connectionId: string): Promise<Holding[]> =>
+    request(`/v1/brokers/${connectionId}/holdings`, { token }),
   listOrders: (token: string, connectionId: string): Promise<OrderHistoryItem[]> =>
     request(`/v1/brokers/${connectionId}/orders`, { token }),
 };

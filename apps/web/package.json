@@ -12,6 +12,7 @@
     "clean": "rm -rf .next dist .turbo"
   },
   "dependencies": {
+    "@noble/curves": "^1.6.0",
     "@rm07/core": "workspace:*",
     "@rm07/ui": "workspace:*",
     "next": "14.2.15",
