@@ -108,6 +108,32 @@ export interface InstrumentHit {
   symbolName: string | null;
 }
 
+export interface AiModeVerdict {
+  exchange: string;
+  tradingSymbol: string;
+  verdict: string;
+  oneLiner: string;
+  targets: {
+    shortTermPaise: string | null;
+    mediumTermPaise: string | null;
+    longTermPaise: string | null;
+  };
+  stopLossPaise: string | null;
+  confidence: number;
+  signals: { news: string; fundamentals: string; technicals: string };
+  riskGrade: string;
+  rationale: string;
+  model: string;
+  raRegistrationNumber: string;
+  disclaimer: string;
+  at: string;
+}
+
+export const aiApi = {
+  verdict: (token: string, symbol: string, exchange: string): Promise<AiModeVerdict> =>
+    request(`/v1/ai/verdict?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}`, { token }),
+};
+
 export const instrumentsApi = {
   search: (token: string, q: string, exchange?: string): Promise<InstrumentHit[]> =>
     request(

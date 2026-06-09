@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiModeModule } from './ai-mode/ai-mode.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { BrokersModule } from './brokers/brokers.module';
@@ -14,6 +15,7 @@ import { WatchlistsModule } from './watchlists/watchlists.module';
     BrokersModule,
     BillingModule,
     WatchlistsModule,
+    AiModeModule,
   ],
 })
 export class AppModule {}

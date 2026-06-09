@@ -66,6 +66,14 @@ const envSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   /** JSON map of our plan id -> Razorpay plan id, e.g. {"basic":"plan_x","pro":"plan_y"}. */
   RAZORPAY_PLAN_MAP: z.string().optional(),
+  /** Anthropic API key for AI Mode verdict generation (Doppler). Mock client used when unset. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** Claude model for AI Mode verdicts (Full Doc §III.7.1 — Sonnet default). */
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  /** Hemal Kotak's SEBI RA registration number, stamped on every verdict + the register. */
+  AI_RA_REGISTRATION_NUMBER: z.string().default('PENDING-RA-REG'),
+  /** Name the recommendation is signed by (the authorising Research Analyst). */
+  AI_SIGNED_BY: z.string().default('Hemal Kotak'),
 });
 
 export type Env = z.infer<typeof envSchema>;
