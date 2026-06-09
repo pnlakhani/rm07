@@ -102,6 +102,20 @@ export const billingApi = {
     request('/v1/billing/subscription', { token }),
 };
 
+export interface InstrumentHit {
+  exchange: string;
+  tradingSymbol: string;
+  symbolName: string | null;
+}
+
+export const instrumentsApi = {
+  search: (token: string, q: string, exchange?: string): Promise<InstrumentHit[]> =>
+    request(
+      `/v1/instruments/search?q=${encodeURIComponent(q)}${exchange ? `&exchange=${exchange}` : ''}`,
+      { token },
+    ),
+};
+
 export interface WatchlistItem {
   id: string;
   exchange: string;

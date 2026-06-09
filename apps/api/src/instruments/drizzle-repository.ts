@@ -1,11 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, sql } from 'drizzle-orm';
 import { schema, type Database } from '@rm07/db';
 import { DATABASE } from '../db/database.module';
 import {
   type BrokerInstrumentRow,
   type BrokerInstrumentsRepository,
+  type InstrumentSearchRow,
 } from './ports';
+
+/** Escape LIKE wildcards so user input matches literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/gu, (ch) => `\\${ch}`);
+}
 
 const UPSERT_CHUNK = 1000;
 
@@ -64,5 +70,36 @@ export class DrizzleBrokerInstrumentsRepository implements BrokerInstrumentsRepo
       written += chunk.length;
     }
     return written;
+  }
+
+  async search(
+    broker: string,
+    exchange: string | null,
+    query: string,
+    limit: number,
+  ): Promise<readonly InstrumentSearchRow[]> {
+    const conditions = [
+      eq(schema.brokerInstruments.broker, broker),
+      eq(schema.brokerInstruments.isActive, true),
+      ilike(schema.brokerInstruments.tradingSymbol, `${escapeLike(query)}%`),
+    ];
+    if (exchange) {
+      conditions.push(eq(schema.brokerInstruments.exchange, exchange));
+    }
+    const rows = await this.database.db
+      .select({
+        exchange: schema.brokerInstruments.exchange,
+        tradingSymbol: schema.brokerInstruments.tradingSymbol,
+        symbolName: schema.brokerInstruments.symbolName,
+      })
+      .from(schema.brokerInstruments)
+      .where(and(...conditions))
+      .orderBy(asc(schema.brokerInstruments.tradingSymbol))
+      .limit(limit);
+    return rows.map((r) => ({
+      exchange: r.exchange,
+      tradingSymbol: r.tradingSymbol,
+      symbolName: r.symbolName ?? null,
+    }));
   }
 }

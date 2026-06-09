@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Card, Splash } from '@/components/ui';
 import { ConnectBroker } from '@/components/connect-broker';
 import { Holdings } from '@/components/holdings';
+import { Watchlists } from '@/components/watchlists';
 
 export default function DashboardPage(): JSX.Element {
   const router = useRouter();
@@ -119,6 +120,11 @@ export default function DashboardPage(): JSX.Element {
           )}
         </section>
       </div>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Watchlists</h2>
+        <Watchlists token={token} />
+      </section>
     </main>
   );
 }
