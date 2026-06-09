@@ -42,7 +42,8 @@ function loadDotEnvFile(): void {
 /** Validated runtime environment. Values are injected from Doppler (Hard rule: no secrets in code). */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+  // Defaults to the host-assigned PORT (Railway/Render/Fly) when set, else 8080.
+  API_PORT: z.coerce.number().int().min(1).max(65535).default(Number(process.env.PORT) || 8080),
   API_CORS_ORIGINS: z
     .string()
     .default('http://localhost:3000')
