@@ -74,6 +74,12 @@ const envSchema = z.object({
   AI_RA_REGISTRATION_NUMBER: z.string().default('PENDING-RA-REG'),
   /** Name the recommendation is signed by (the authorising Research Analyst). */
   AI_SIGNED_BY: z.string().default('Hemal Kotak'),
+  /**
+   * Platform-level (system) Dhan market-data credentials for AI Mode technical signals — a
+   * platform-owned account, NOT a user's connection. When unset, AI Mode uses the stub provider.
+   */
+  DHAN_DATA_CLIENT_ID: z.string().optional(),
+  DHAN_DATA_ACCESS_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

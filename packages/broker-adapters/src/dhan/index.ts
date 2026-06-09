@@ -15,3 +15,8 @@ export function registerDhanAdapter(fetchImpl?: typeof globalThis.fetch): void {
 }
 
 export { parseDhanScripMaster, dhanExchangeToCode, type DhanScrip } from './scrip-master.js';
+export {
+  fetchDhanDailyCandles,
+  type DhanCandle,
+  type DhanHistoricalRequest,
+} from './historical.js';
