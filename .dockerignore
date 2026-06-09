@@ -1,0 +1,14 @@
+# Keep the Docker build context small and reproducible.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.git
+.github
+**/*.md
+**/.env
+**/.env.*
+run-api.bat
+**/*.tsbuildinfo
+infra/.terraform
